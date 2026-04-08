@@ -119,12 +119,7 @@
                             </div>
                         </div>
 
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 mb-2 dark:text-slate-300">Email nhận thông báo (Quản trị)</label>
-                            <input type="email" name="admin_email" value="<%= smtpConfig.getProperty("admin.email", "") %>" placeholder="admin@company.com"
-                                   class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all">
-                            <p class="text-xs text-slate-400 mt-1">Email nhận các thông báo từ hệ thống</p>
-                        </div>
+                        <!-- Tạm ẩn cấu hình admin_email khỏi giao diện theo yêu cầu. -->
 
                         <div class="pt-4 border-t border-slate-100 dark:border-slate-700">
                             <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-teal-600 text-white font-semibold hover:bg-teal-700 transition-all">
