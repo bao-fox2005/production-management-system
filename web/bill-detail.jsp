@@ -64,6 +64,11 @@
     String paymentCode = (payment != null && payment.getPaymentId() > 0) ? String.format("PAY-%04d", payment.getPaymentId()) : "-";
 
     boolean showInvoiceQr = "PENDING".equals(paymentStatusCode) && qrBase64 != null && !qrBase64.isEmpty();
+    boolean canManageQr = !isPublicView && !isEmbedView;
+    boolean hasPaymentRecord = payment != null && payment.getPaymentId() > 0;
+    boolean canRefreshQr = canManageQr && payment != null && ("PENDING".equals(paymentStatusCode) || "EXPIRED".equals(paymentStatusCode));
+    boolean canCreateQr = canManageQr && payment == null;
+    String qrAction = hasPaymentRecord ? "refreshQr" : "createQr";
 
     String downloadUrl = "BillController?action=" + (isPublicView ? "downloadPublicBill" : "downloadBill") + "&bill_id=" + bill.getBill_id();
     String backUrl = "MainController?action=listBill";
@@ -227,6 +232,22 @@
                     <% } %>
 
                     <div class="no-print mt-10 flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-6">
+                        <% if (canRefreshQr || canCreateQr) { %>
+                        <form action="PaymentController" method="post" class="inline-flex">
+                            <input type="hidden" name="action" value="<%= qrAction %>" />
+                            <input type="hidden" name="source" value="bill" />
+                            <input type="hidden" name="bill_id" value="<%= bill.getBill_id() %>" />
+                            <% if (hasPaymentRecord) { %>
+                            <input type="hidden" name="payment_id" value="<%= payment.getPaymentId() %>" />
+                            <% } else { %>
+                            <input type="hidden" name="amount" value="<%= bill.getTotal_amount() %>" />
+                            <input type="hidden" name="customer_name" value="<%= customerName %>" />
+                            <input type="hidden" name="customer_email" value="<%= customerEmail %>" />
+                            <% } %>
+                            <input type="hidden" name="expire_minutes" value="1440" />
+                            <button type="submit" class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"><%= hasPaymentRecord ? "Tạo lại mã QR" : "Tạo mã QR" %></button>
+                        </form>
+                        <% } %>
                         <a href="<%= downloadUrl %>" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Tải hóa đơn</a>
                         <% if (!isPublicView && !isEmbedView) { %>
                         <a href="<%= backUrl %>" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Quay lại danh sách</a>

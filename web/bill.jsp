@@ -40,7 +40,7 @@
         String itemName = item.getItemName() != null ? item.getItemName().trim() : "Item #" + item.getItemID();
         String itemLabel = itemName + " (" + itemType + ")";
         itemTypeOptions.append("<option value=\"")
-                .append(itemType.replace("\"", "&quot;"))
+                .append(item.getItemID())
                 .append("\">")
                 .append(itemLabel.replace("<", "&lt;").replace(">", "&gt;"))
                 .append("</option>");
@@ -459,7 +459,7 @@
                                             <% } %>
                                             <button type="button"
                                                     id="view-qr-btn-<%= b.getBill_id() %>"
-                                                    data-mode="<%= (payment != null && !isPaidPayment && !paymentExpired) ? "view" : (payment != null ? "recreate" : "create") %>"
+                                                    data-mode="invoice"
                                                     data-bill-id="<%= b.getBill_id() %>"
                                                     data-amount="<%= payment != null ? payment.getAmount() : b.getTotal_amount() %>"
                                                     data-customer-name="<%= customerName %>"
@@ -473,18 +473,12 @@
                                                     data-payment-status="<%= payment != null ? payment.getStatus() : "" %>"
                                                     data-qr-image-base64="<%= (!paymentExpired && payment != null) ? qrImageBase64Attr : "" %>"
                                                     onclick="openPaymentDetail(this)"
-                                                    class="inline-flex h-10 w-10 items-center justify-center rounded-2xl <%= isPaidPayment ? "bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-500/30" : (paymentExpired || payment == null ? "bg-orange-500 hover:bg-orange-600 shadow-sm shadow-orange-500/30" : "bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-500/30") %> text-white transition-colors"
-                                                    title="<%= isPaidPayment ? "Xem hóa đơn" : (paymentExpired || payment == null ? (payment != null ? "Tạo lại QR" : "Tạo QR") : "Xem mã QR thanh toán") %>"
-                                                    aria-label="<%= isPaidPayment ? "Xem hóa đơn" : (paymentExpired || payment == null ? (payment != null ? "Tạo lại QR" : "Tạo QR") : "Xem mã QR thanh toán") %>">
+                                                    class="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-600 text-white transition-colors hover:bg-indigo-700 shadow-sm shadow-indigo-500/30"
+                                                    title="Xem hóa đơn"
+                                                    aria-label="Xem hóa đơn">
                                                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <% if (isPaidPayment) { %>
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                                    <% } else if (paymentExpired || payment == null) { %>
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12a8 8 0 0113.66-5.66L20 8M20 4v4h-4M20 12a8 8 0 01-13.66 5.66L4 16M4 20v-4h4"/>
-                                                    <% } else { %>
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h3v3H7V7zm7 0h3v3h-3V7zM7 14h3v3H7v-3zm7 0h3m-3 3h3m-3-6h3m-10 3h3m1 4H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v5"/>
-                                                    <% } %>
                                                 </svg>
                                             </button>
                                             <button type="button"
@@ -1224,7 +1218,6 @@
             const safeBillId = billId ? String(billId) : '';
             const hasBillId = !!safeBillId;
             const normalizedStatus = String(paymentStatus || '').toUpperCase();
-            const canRecreate = normalizedStatus === 'PENDING' || normalizedStatus === 'EXPIRED';
             qrInvoiceActions.classList.toggle('hidden', !hasBillId);
             if (qrDownloadInvoiceLink) {
                 qrDownloadInvoiceLink.href = hasBillId ? buildInvoiceDownloadUrl(safeBillId) : '#';
@@ -1234,7 +1227,7 @@
                 qrViewInvoiceLink.onclick = null;
             }
             if (qrRecreateButton) {
-                qrRecreateButton.classList.toggle('hidden', !hasBillId || !canRecreate);
+                qrRecreateButton.classList.add('hidden');
                 qrRecreateButton.dataset.billId = safeBillId;
                 qrRecreateButton.dataset.paymentStatus = normalizedStatus;
             }
@@ -1265,20 +1258,10 @@
 
         function openPaymentDetail(trigger) {
             if (!trigger) return;
-            const paymentStatus = (trigger.getAttribute('data-payment-status') || '').toUpperCase();
-            const mode = trigger.getAttribute('data-mode') || 'create';
-            if (paymentStatus === 'PAID') {
-                const billId = trigger.getAttribute('data-bill-id') || '';
-                if (billId) {
-                    window.location.href = buildInvoiceViewUrl(billId);
-                }
-                return;
+            const billId = trigger.getAttribute('data-bill-id') || '';
+            if (billId) {
+                window.location.href = buildInvoiceViewUrl(billId);
             }
-            if (mode === 'recreate' || mode === 'create') {
-                handleCreateOrRecreateQr(trigger);
-                return;
-            }
-            openQrModal(trigger);
         }
  
         function getBankDisplayName(bankBin) {

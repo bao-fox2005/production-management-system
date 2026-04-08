@@ -498,21 +498,66 @@ public class BillController extends HttpServlet {
             return lines;
         }
 
+        ItemDAO itemDAO = new ItemDAO();
         int max = Math.min(itemTypes.length, Math.min(quantities.length, unitPrices.length));
         for (int i = 0; i < max; i++) {
-            String itemType = trimToNull(itemTypes[i]);
+            String rawItemValue = trimToNull(itemTypes[i]);
             int qty = parseIntOrDefault(quantities[i], 0);
             double unitPrice = parseDoubleOrDefault(unitPrices[i], 0D);
-            if (itemType == null || qty <= 0 || unitPrice <= 0) {
+            if (rawItemValue == null || qty <= 0 || unitPrice <= 0) {
                 continue;
             }
+
+            String itemName = rawItemValue;
+            if (Pattern.matches("\\d+", rawItemValue)) {
+                ItemDTO item = itemDAO.SearchByID(rawItemValue);
+                if (item != null && trimToNull(item.getItemName()) != null) {
+                    itemName = item.getItemName().trim();
+                }
+            }
+
+            if (trimToNull(itemName) == null) {
+                continue;
+            }
+
             double lineTotal = BigDecimal.valueOf(unitPrice)
                     .multiply(BigDecimal.valueOf(qty))
                     .doubleValue();
-            lines.add(new BillLineDTO(0, 0, itemType, qty, unitPrice, lineTotal, null));
+            lines.add(new BillLineDTO(0, 0, itemName, qty, unitPrice, lineTotal, null));
         }
 
         return lines;
+    }
+
+    private void normalizeBillLineDisplayNames(List<BillLineDTO> lines, int woId) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+
+        String fallbackProductName = null;
+        if (woId > 0) {
+            WorkOrderDTO workOrder = new WorkOrderDAO().searchById(woId);
+            if (workOrder != null && trimToNull(workOrder.getProductName()) != null) {
+                fallbackProductName = workOrder.getProductName().trim();
+            }
+        }
+
+        for (BillLineDTO line : lines) {
+            if (line == null) {
+                continue;
+            }
+            String rawName = trimToNull(line.getItemType());
+            if (rawName == null) {
+                continue;
+            }
+            String normalized = rawName.toLowerCase().replaceAll("\\s+", "");
+            boolean isGenericProduct = "sanpham".equals(normalized)
+                    || "sảnphẩm".equals(normalized)
+                    || "product".equals(normalized);
+            if (isGenericProduct && fallbackProductName != null) {
+                line.setItemType(fallbackProductName);
+            }
+        }
     }
 
     private void sendInvoiceEmailPhase1(int billId, double totalAmount, int customerId,
@@ -551,6 +596,8 @@ public class BillController extends HttpServlet {
                 paymentStatusLabel = "Hết hạn";
             }
 
+
+            normalizeBillLineDisplayNames(quoteLines, bill != null ? bill.getWo_id() : 0);
 
             StringBuilder linesHtml = new StringBuilder();
             if (quoteLines != null && !quoteLines.isEmpty()) {
@@ -629,6 +676,7 @@ public class BillController extends HttpServlet {
 
         PaymentDTO payment = new PaymentDAO().getLatestPaymentByBillId(billId);
         List<BillLineDTO> lines = new BillLineDAO().getByBillId(billId);
+        normalizeBillLineDisplayNames(lines, bill.getWo_id());
 
         request.setAttribute("detailBill", bill);
         request.setAttribute("detailCustomer", customer);
@@ -658,6 +706,7 @@ public class BillController extends HttpServlet {
                 : null;
         PaymentDTO payment = new PaymentDAO().getLatestPaymentByBillId(billId);
         List<BillLineDTO> lines = new BillLineDAO().getByBillId(billId);
+        normalizeBillLineDisplayNames(lines, bill.getWo_id());
 
         DecimalFormat money = new DecimalFormat("#,###");
         SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
@@ -671,14 +720,10 @@ public class BillController extends HttpServlet {
             }
         }
 
-        SystemConfigService configService = new SystemConfigService();
-        String companyName = trimToNull(configService.getCompanyName()) != null ? configService.getCompanyName() : "PMS MANUFACTURING";
-        String companyAddress = trimToNull(configService.getCompanyAddress()) != null ? configService.getCompanyAddress() : "Địa chỉ chưa cập nhật";
-        String companyPhone = trimToNull(configService.getCompanyPhone()) != null ? configService.getCompanyPhone() : "Chưa cập nhật";
-        String companyEmail = trimToNull(configService.getAdminEmail()) != null ? configService.getAdminEmail() : trimToNull(configService.getSmtpUser());
-        if (companyEmail == null) {
-            companyEmail = "Chưa cập nhật";
-        }
+        String companyName = "PMS MANUFACTURING";
+        String companyAddress = "123 Anywhere St., Any City";
+        String companyPhone = "1900 6868";
+        String companyEmail = "contact@pms.local";
 
         String paymentCode = (payment != null && payment.getPaymentId() > 0)
                 ? String.format("PAY-%04d", payment.getPaymentId())
