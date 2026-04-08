@@ -366,17 +366,27 @@ public final class PdfInvoiceExporter {
     private static byte[] readClasspathBytes(String path) {
         try (InputStream input = PdfInvoiceExporter.class.getResourceAsStream(path)) {
             if (input != null) {
-                return input.readAllBytes();
+                return readAllBytesCompat(input);
             }
         } catch (Exception ignored) {
         }
         try (InputStream input = PdfInvoiceExporter.class.getClassLoader().getResourceAsStream(stripLeadingSlash(path))) {
             if (input != null) {
-                return input.readAllBytes();
+                return readAllBytesCompat(input);
             }
         } catch (Exception ignored) {
         }
         return null;
+    }
+
+    private static byte[] readAllBytesCompat(InputStream input) throws java.io.IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[4096];
+        int bytesRead;
+        while ((bytesRead = input.read(chunk)) != -1) {
+            buffer.write(chunk, 0, bytesRead);
+        }
+        return buffer.toByteArray();
     }
 
     private static String readClasspathText(String path) {
