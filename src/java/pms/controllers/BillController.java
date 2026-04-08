@@ -181,11 +181,11 @@ public class BillController extends HttpServlet {
             if (!configService.hasValidBankReceiverConfig()) {
                 setBillPopup(request,
                         "Thiếu cấu hình nhận tiền",
-                        "Chưa có thông tin tài khoản nhận tiền hợp lệ để tạo mã QR. Vui lòng cập nhật cấu hình thanh toán trước khi tạo hóa đơn mới.",
+                        "Hệ thống chưa đọc được tài khoản nhận tiền hợp lệ để tạo mã QR cho hóa đơn. Vui lòng mở phần quản lý thanh toán, lưu lại tài khoản nhận tiền đang hoạt động rồi thử lại.",
                         "PaymentController?action=list",
                         "Đi tới quản lý thanh toán",
                         true);
-                request.setAttribute("error", "Chưa có thông tin nhận tiền hợp lệ để tạo hóa đơn.");
+                request.setAttribute("error", "Hệ thống chưa đọc được tài khoản nhận tiền hợp lệ để tạo hóa đơn.");
                 ListBill(request);
                 return;
             }

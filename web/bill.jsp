@@ -557,7 +557,7 @@
                 
                 <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-2 dark:text-slate-300">Tổng Tiền (VND)</label>
-                    <input id="billTotalAmount" type="number" name="total_amount" required min="1000" step="1000" placeholder="Hệ thống tự tính"
+                    <input id="billTotalAmount" type="number" name="total_amount" required min="0.01" step="0.01" placeholder="Hệ thống tự tính"
                            readonly
                            class="w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700 focus:border-slate-200 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
                 </div>
@@ -883,7 +883,7 @@
                 + quoteItemOptionsHtml
                 + '</select>'
                 + '<input type="number" name="line_quantity" required min="1" step="1" placeholder="SL" class="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />'
-                + '<input type="number" name="line_unit_price" required min="1000" step="1000" placeholder="Đơn giá" class="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />'
+                + '<input type="number" name="line_unit_price" required min="0.01" step="0.01" placeholder="Đơn giá" class="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />'
                 + '<div class="md:col-span-4 flex items-center gap-2">'
                 + '  <input type="text" name="line_total_view" readonly placeholder="Thành tiền" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300" />'
                 + '  <button type="button" class="remove-quote-line inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white hover:bg-rose-700" title="Xóa dòng">×</button>'
@@ -1042,11 +1042,11 @@
             if (input.validity.typeMismatch) return 'Định dạng ' + label + ' chưa đúng.';
             if (input.validity.rangeUnderflow) {
                 if (input.name === 'line_quantity') return 'Số lượng phải lớn hơn hoặc bằng 1.';
-                if (input.name === 'line_unit_price') return 'Đơn giá phải lớn hơn hoặc bằng 0.';
+                if (input.name === 'line_unit_price') return 'Đơn giá phải lớn hơn 0.';
                 return 'Giá trị ' + label + ' nhỏ hơn mức cho phép.';
             }
             if (input.validity.stepMismatch) {
-                if (input.name === 'line_unit_price') return 'Đơn giá phải là bội số của 1.000 VND.';
+                if (input.name === 'line_unit_price') return 'Đơn giá chỉ được nhập số dương hợp lệ.';
                 if (input.name === 'line_quantity') return 'Số lượng phải là số nguyên hợp lệ.';
                 return 'Giá trị ' + label + ' không đúng bước nhập cho phép.';
             }
@@ -2061,8 +2061,8 @@
         if (billTotalAmount) {
             billTotalAmount.addEventListener('blur', function() {
                 const numericValue = Number(this.value || 0);
-                if (numericValue > 0 && numericValue < 1000) {
-                    this.value = 1000;
+                if (numericValue > 0) {
+                    this.value = String(Math.round(numericValue * 100) / 100);
                 }
             });
         }

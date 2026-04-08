@@ -209,10 +209,7 @@ public class SystemConfigService implements Serializable {
                 String bin = trimToNull(parts[1]);
                 String account = trimToNull(parts[2]);
                 String name = trimToNull(parts[3]);
-                if (bin != null && account != null && name != null
-                        && !isPlaceholderValue(bin, "970406")
-                        && !isPlaceholderValue(account, "1234567890")
-                        && !isPlaceholderValue(name, "CONG TY TNHH PMS")) {
+                if (hasCompleteBankReceiver(bin, account, name)) {
                     return true;
                 }
             }
@@ -221,12 +218,19 @@ public class SystemConfigService implements Serializable {
         String bankBin = trimToNull(getBankBin());
         String bankAccount = trimToNull(getBankAccount());
         String bankAccountName = trimToNull(getBankAccountName());
+        return hasCompleteBankReceiver(bankBin, bankAccount, bankAccountName);
+    }
+    private boolean hasCompleteBankReceiver(String bankBin, String bankAccount, String bankAccountName) {
         return bankBin != null
                 && bankAccount != null
                 && bankAccountName != null
-                && !isPlaceholderValue(bankBin, "970406")
-                && !isPlaceholderValue(bankAccount, "1234567890")
-                && !isPlaceholderValue(bankAccountName, "CONG TY TNHH PMS");
+                && !isDefaultBankReceiver(bankBin, bankAccount, bankAccountName);
+    }
+
+    private boolean isDefaultBankReceiver(String bankBin, String bankAccount, String bankAccountName) {
+        return isPlaceholderValue(bankBin, "970406")
+                && isPlaceholderValue(bankAccount, "1234567890")
+                && isPlaceholderValue(bankAccountName, "CONG TY TNHH PMS");
     }
 
     public EmailService createEmailService() {

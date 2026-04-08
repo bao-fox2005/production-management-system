@@ -101,7 +101,19 @@ public class PaymentService {
                     amount,
                     billCode
             );
-            qrBase64 = qrGenerator.imageUrlToBase64(qrVietQrUrl);
+            try {
+                qrBase64 = qrGenerator.imageUrlToBase64(qrVietQrUrl);
+            } catch (Exception externalQrError) {
+                System.err.println("Khong lay duoc anh QR tu VietQR, chuyen sang tao QR noi bo: " + externalQrError.getMessage());
+                String qrRaw = qrGenerator.generatePaymentQrRaw(
+                        bankBinToUse,
+                        bankAccountToUse,
+                        bankAccountNameToUse,
+                        amount,
+                        billCode
+                );
+                qrBase64 = qrGenerator.generateQrCodeBase64(qrRaw);
+            }
         } catch (Exception e) {
             System.err.println("Loi tao QR: " + e.getMessage());
             throw new RuntimeException("Loi tao ma QR: " + e.getMessage(), e);
@@ -176,7 +188,19 @@ public class PaymentService {
                     bankBin, bankAccount, bankAccountName,
                     payment.getAmount(), billCode
             );
-            qrBase64 = qrGenerator.imageUrlToBase64(qrVietQrUrl);
+            try {
+                qrBase64 = qrGenerator.imageUrlToBase64(qrVietQrUrl);
+            } catch (Exception externalQrError) {
+                System.err.println("Khong lay duoc anh QR tu VietQR khi refresh, chuyen sang tao QR noi bo: " + externalQrError.getMessage());
+                String qrRaw = qrGenerator.generatePaymentQrRaw(
+                        bankBin,
+                        bankAccount,
+                        bankAccountName,
+                        payment.getAmount(),
+                        billCode
+                );
+                qrBase64 = qrGenerator.generateQrCodeBase64(qrRaw);
+            }
         } catch (Exception e) {
             System.err.println("Loi tao QR khi refresh: " + e.getMessage());
             return false;
