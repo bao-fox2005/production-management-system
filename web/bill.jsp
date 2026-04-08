@@ -12,6 +12,11 @@
     
     String msg = request.getAttribute("msg") != null ? (String) request.getAttribute("msg") : request.getParameter("msg");
     String error = request.getAttribute("error") != null ? (String) request.getAttribute("error") : request.getParameter("error");
+    String billPopupTitle = request.getAttribute("billPopupTitle") != null ? (String) request.getAttribute("billPopupTitle") : "Thông báo";
+    String billPopupMessage = request.getAttribute("billPopupMessage") != null ? (String) request.getAttribute("billPopupMessage") : "";
+    String billPopupActionUrl = request.getAttribute("billPopupActionUrl") != null ? (String) request.getAttribute("billPopupActionUrl") : "";
+    String billPopupActionLabel = request.getAttribute("billPopupActionLabel") != null ? (String) request.getAttribute("billPopupActionLabel") : "";
+    boolean billPopupReopenModal = Boolean.TRUE.equals(request.getAttribute("billPopupReopenModal"));
     String filterStatus = request.getParameter("filter");
     String searchKeyword = request.getParameter("keyword");
     
@@ -112,6 +117,10 @@
 
     String bankAccountsDataJs = bankAccountsData.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
     String bankActiveAccountIdJs = bankActiveAccountId.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
+    String billPopupTitleJs = billPopupTitle.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
+    String billPopupMessageJs = billPopupMessage.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
+    String billPopupActionUrlJs = billPopupActionUrl.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
+    String billPopupActionLabelJs = billPopupActionLabel.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
 
     double totalAmount = 0;
     int countPaid = 0;
@@ -528,7 +537,7 @@
                             + Thêm khách hàng
                         </button>
                     </div>
-                    <select id="billCustomerSelect" name="customer_id" class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
+                    <select id="billCustomerSelect" name="customer_id" required class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
                         <option value="" disabled selected hidden>-- Chọn khách hàng có sẵn --</option>
                         <% for (CustomerDTO c : customers) { %>
                         <option value="<%= c.getCustomer_id() %>"><%= c.getCustomer_name() %></option>
@@ -586,13 +595,13 @@
                 </div>
                 <div class="grid gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Số điện thoại</label>
-                        <input type="text" name="phone" maxlength="20" placeholder="VD: 0901234567"
+                        <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Số điện thoại <span class="text-red-500">*</span></label>
+                        <input type="text" name="phone" required maxlength="15" placeholder="VD: 0901234567"
                                class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
                     </div>
                     <div>
-                        <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Email</label>
-                        <input type="email" name="email" maxlength="150" placeholder="VD: khachhang@email.com"
+                        <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Email <span class="text-red-500">*</span></label>
+                        <input type="email" name="email" required maxlength="50" placeholder="VD: khachhang@email.com"
                                class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
                     </div>
                 </div>
@@ -870,11 +879,11 @@
             const row = document.createElement('div');
             row.className = 'quote-line grid gap-2 md:grid-cols-12';
             row.innerHTML = ''
-                + '<select name="line_item_type" class="md:col-span-4 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white">'
+                + '<select name="line_item_type" required class="md:col-span-4 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white">'
                 + quoteItemOptionsHtml
                 + '</select>'
-                + '<input type="number" name="line_quantity" min="1" step="1" placeholder="SL" class="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />'
-                + '<input type="number" name="line_unit_price" min="0" step="1000" placeholder="Đơn giá" class="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />'
+                + '<input type="number" name="line_quantity" required min="1" step="1" placeholder="SL" class="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />'
+                + '<input type="number" name="line_unit_price" required min="1000" step="1000" placeholder="Đơn giá" class="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />'
                 + '<div class="md:col-span-4 flex items-center gap-2">'
                 + '  <input type="text" name="line_total_view" readonly placeholder="Thành tiền" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300" />'
                 + '  <button type="button" class="remove-quote-line inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white hover:bg-rose-700" title="Xóa dòng">×</button>'
@@ -904,8 +913,8 @@
             rows.forEach(function(row) {
                 sum += recalcLineRow(row);
             });
-            if (billTotalAmount && sum > 0) {
-                billTotalAmount.value = String(Math.round(sum));
+            if (billTotalAmount) {
+                billTotalAmount.value = sum > 0 ? String(Math.round(sum)) : '';
             }
         }
 
@@ -946,33 +955,73 @@
 
             popup = document.createElement('div');
             popup.id = 'billErrorPopup';
-            popup.className = 'pointer-events-none fixed inset-x-0 top-6 z-[120] mx-auto hidden w-full max-w-md px-4';
+            popup.className = 'pointer-events-none fixed inset-x-0 top-6 z-[120] mx-auto hidden w-full max-w-lg px-4';
             popup.innerHTML = ''
-                + '<div class="pointer-events-auto flex items-start gap-3 rounded-2xl border border-rose-200 bg-white/95 p-4 shadow-2xl backdrop-blur dark:border-rose-900/60 dark:bg-slate-900/95">'
-                + '  <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300">!<\/div>'
-                + '  <div class="min-w-0">'
-                + '    <div class="text-sm font-bold text-rose-700 dark:text-rose-300">Lỗi dữ liệu<\/div>'
-                + '    <div id="billErrorPopupMessage" class="mt-1 text-sm leading-5 text-slate-700 dark:text-slate-200"><\/div>'
+                + '<div class="pointer-events-auto rounded-2xl border border-rose-200 bg-white/95 p-4 shadow-2xl backdrop-blur dark:border-rose-900/60 dark:bg-slate-900/95">'
+                + '  <div class="flex items-start gap-3">'
+                + '    <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300">!<\/div>'
+                + '    <div class="min-w-0 flex-1">'
+                + '      <div id="billErrorPopupTitle" class="text-sm font-bold text-rose-700 dark:text-rose-300">Lỗi dữ liệu<\/div>'
+                + '      <div id="billErrorPopupMessage" class="mt-1 text-sm leading-5 text-slate-700 dark:text-slate-200"><\/div>'
+                + '      <div id="billErrorPopupActions" class="mt-4 hidden flex flex-wrap gap-2">'
+                + '        <a id="billErrorPopupActionLink" href="#" class="inline-flex items-center rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700">Xem cấu hình<\/a>'
+                + '        <button type="button" id="billErrorPopupCloseBtn" class="inline-flex items-center rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Đóng<\/button>'
+                + '      <\/div>'
+                + '    <\/div>'
                 + '  <\/div>'
                 + '<\/div>';
             document.body.appendChild(popup);
+
+            const closeBtn = document.getElementById('billErrorPopupCloseBtn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    popup.classList.add('hidden');
+                });
+            }
             return popup;
         }
 
-        function showErrorPopup(message) {
+        function showErrorPopup(message, options) {
             const popup = ensureErrorPopup();
+            const titleNode = document.getElementById('billErrorPopupTitle');
             const messageNode = document.getElementById('billErrorPopupMessage');
+            const actionWrap = document.getElementById('billErrorPopupActions');
+            const actionLink = document.getElementById('billErrorPopupActionLink');
+            const title = options && options.title ? options.title : 'Lỗi dữ liệu';
+            const actionUrl = options && options.actionUrl ? options.actionUrl : '';
+            const actionLabel = options && options.actionLabel ? options.actionLabel : 'Xem cấu hình';
+            const persistent = !!(options && options.persist);
+
+            if (titleNode) {
+                titleNode.textContent = title;
+            }
             if (messageNode) {
                 messageNode.textContent = message || 'Vui lòng kiểm tra lại dữ liệu nhập.';
             }
+            if (actionWrap && actionLink) {
+                if (actionUrl) {
+                    actionLink.href = actionUrl;
+                    actionLink.textContent = actionLabel;
+                    actionWrap.classList.remove('hidden');
+                    actionWrap.classList.add('flex');
+                } else {
+                    actionWrap.classList.add('hidden');
+                    actionWrap.classList.remove('flex');
+                    actionLink.setAttribute('href', '#');
+                }
+            }
+
             popup.classList.remove('hidden');
 
             if (errorPopupTimer) {
                 clearTimeout(errorPopupTimer);
+                errorPopupTimer = null;
             }
-            errorPopupTimer = setTimeout(function() {
-                popup.classList.add('hidden');
-            }, 3200);
+            if (!persistent) {
+                errorPopupTimer = setTimeout(function() {
+                    popup.classList.add('hidden');
+                }, 3200);
+            }
         }
 
         function getFieldLabel(input) {
@@ -1630,6 +1679,36 @@
                     if (nameInput) nameInput.focus();
                     return;
                 }
+                if (customerName.length > 100) {
+                    setQuickCustomerStatus('Tên khách hàng không được vượt quá 100 ký tự.', true);
+                    if (nameInput) nameInput.focus();
+                    return;
+                }
+                if (!phone) {
+                    setQuickCustomerStatus('Vui lòng nhập số điện thoại khách hàng.', true);
+                    if (phoneInput) phoneInput.focus();
+                    return;
+                }
+                if (phone.length > 15) {
+                    setQuickCustomerStatus('Số điện thoại không được vượt quá 15 ký tự.', true);
+                    if (phoneInput) phoneInput.focus();
+                    return;
+                }
+                if (!/^[0-9+\-\s().]{8,15}$/.test(phone)) {
+                    setQuickCustomerStatus('Số điện thoại không hợp lệ.', true);
+                    if (phoneInput) phoneInput.focus();
+                    return;
+                }
+                if (!email) {
+                    setQuickCustomerStatus('Vui lòng nhập email khách hàng.', true);
+                    if (emailInput) emailInput.focus();
+                    return;
+                }
+                if (email.length > 50) {
+                    setQuickCustomerStatus('Email khách hàng không được vượt quá 50 ký tự.', true);
+                    if (emailInput) emailInput.focus();
+                    return;
+                }
 
                 if (submitBtn) {
                     submitBtn.disabled = true;
@@ -1999,6 +2078,13 @@
                     return;
                 }
 
+                const quoteRows = addBillForm.querySelectorAll('#quoteLinesContainer .quote-line');
+                if (!quoteRows.length) {
+                    event.preventDefault();
+                    showErrorPopup('Chi tiết báo giá phải có ít nhất 1 sản phẩm.', { title: 'Thiếu sản phẩm báo giá' });
+                    return;
+                }
+
                 recalcBillTotalFromLines();
 
                 const firstInvalid = addBillForm.querySelector(':invalid');
@@ -2014,6 +2100,26 @@
                     showErrorPopup('Vui lòng nhập tổng tiền lớn hơn 0.');
                     if (billTotalAmount) billTotalAmount.focus();
                 }
+            });
+        }
+
+        const serverBillPopup = {
+            title: '<%= billPopupTitleJs %>',
+            message: '<%= billPopupMessageJs %>',
+            actionUrl: '<%= request.getContextPath() %>/<%= billPopupActionUrlJs %>',
+            actionLabel: '<%= billPopupActionLabelJs %>',
+            reopenModal: '<%= String.valueOf(billPopupReopenModal) %>' === 'true'
+        };
+
+        if (serverBillPopup.message) {
+            if (serverBillPopup.reopenModal) {
+                openAddModal();
+            }
+            showErrorPopup(serverBillPopup.message, {
+                title: serverBillPopup.title || 'Thông báo',
+                actionUrl: serverBillPopup.actionUrl,
+                actionLabel: serverBillPopup.actionLabel || 'Xem cấu hình',
+                persist: true
             });
         }
 

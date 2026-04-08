@@ -624,6 +624,7 @@ public class EmailService implements Serializable {
 
     public boolean isConfigured() {
         return smtpHost != null && !smtpHost.trim().isEmpty()
-                && smtpUser != null && !smtpUser.trim().isEmpty();
+                && smtpUser != null && !smtpUser.trim().isEmpty()
+                && smtpPassword != null && !smtpPassword.trim().isEmpty();
     }
 }

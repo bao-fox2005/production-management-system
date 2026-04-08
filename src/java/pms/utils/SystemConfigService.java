@@ -180,6 +180,55 @@ public class SystemConfigService implements Serializable {
     public String getCompanyPhone() { return getConfig("COMPANY_PHONE"); }
     public String getCompanyAddress() { return getConfig("COMPANY_ADDRESS"); }
 
+    public boolean hasValidSmtpConfig() {
+        String host = trimToNull(getSmtpHost());
+        String user = trimToNull(getSmtpUser());
+        String password = trimToNull(getSmtpPassword());
+        String port = trimToNull(getSmtpPort());
+        return host != null
+                && user != null
+                && password != null
+                && port != null
+                && !isPlaceholderValue(user, "your-email@gmail.com")
+                && !isPlaceholderValue(password, "your-app-password");
+    }
+
+    public boolean hasValidBankReceiverConfig() {
+        String serialized = trimToNull(getConfig("BANK_RECEIVER_ACCOUNTS", ""));
+        if (serialized != null) {
+            String[] rows = serialized.split(";;");
+            for (String row : rows) {
+                String current = trimToNull(row);
+                if (current == null) {
+                    continue;
+                }
+                String[] parts = current.split("\\|\\|", -1);
+                if (parts.length < 4) {
+                    continue;
+                }
+                String bin = trimToNull(parts[1]);
+                String account = trimToNull(parts[2]);
+                String name = trimToNull(parts[3]);
+                if (bin != null && account != null && name != null
+                        && !isPlaceholderValue(bin, "970406")
+                        && !isPlaceholderValue(account, "1234567890")
+                        && !isPlaceholderValue(name, "CONG TY TNHH PMS")) {
+                    return true;
+                }
+            }
+        }
+
+        String bankBin = trimToNull(getBankBin());
+        String bankAccount = trimToNull(getBankAccount());
+        String bankAccountName = trimToNull(getBankAccountName());
+        return bankBin != null
+                && bankAccount != null
+                && bankAccountName != null
+                && !isPlaceholderValue(bankBin, "970406")
+                && !isPlaceholderValue(bankAccount, "1234567890")
+                && !isPlaceholderValue(bankAccountName, "CONG TY TNHH PMS");
+    }
+
     public EmailService createEmailService() {
         EmailService email = new EmailService();
         email.setSmtpHost(getSmtpHost());
@@ -187,5 +236,19 @@ public class SystemConfigService implements Serializable {
         email.setSmtpUser(getSmtpUser());
         email.setSmtpPassword(getSmtpPassword());
         return email;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private boolean isPlaceholderValue(String value, String placeholder) {
+        String normalized = trimToNull(value);
+        String expected = trimToNull(placeholder);
+        return normalized != null && expected != null && normalized.equalsIgnoreCase(expected);
     }
 }

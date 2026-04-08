@@ -7,6 +7,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.regex.Pattern;
 import pms.model.CustomerDAO;
 import pms.model.CustomerDTO;
 
@@ -24,6 +25,8 @@ import pms.model.CustomerDTO;
  * thay vì request attribute, tránh mất message sau redirect.
  */
 public class CustomerController extends HttpServlet {
+
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$", Pattern.CASE_INSENSITIVE);
 
     /**
      * Điểm xử lý chung cho cả GET và POST.
@@ -148,10 +151,10 @@ public class CustomerController extends HttpServlet {
 
             // Tạo DTO với id=0 (DB tự sinh ID khi INSERT)
             CustomerDTO c = new CustomerDTO(0, name, phone, email);
+            String validationError = validateCustomerInput(name, phone, email);
 
-            if (name == null) {
-                // Validate: tên không được rỗng
-                request.setAttribute("error", "Tên khách không được để trống");
+            if (validationError != null) {
+                request.setAttribute("error", validationError);
                 request.setAttribute("customer", c); // Giữ lại dữ liệu đã nhập
 
             } else if (cdao.insertCustomer(c)) {
@@ -160,7 +163,7 @@ public class CustomerController extends HttpServlet {
                         + safeEncode("Thêm khách hàng thành công!");
             } else {
                 // INSERT thất bại → lấy lỗi từ DAO (ví dụ: trùng email)
-                String daoError = cdao.getLastError();
+                String daoError = normalizeCustomerDaoError(cdao.getLastError());
                 request.setAttribute("error", daoError != null && !daoError.trim().isEmpty()
                         ? daoError
                         : "Không thể thêm khách hàng");
@@ -203,10 +206,10 @@ public class CustomerController extends HttpServlet {
 
                 // Tạo DTO mới với dữ liệu đã chỉnh sửa
                 c = new CustomerDTO(id, name, phone, email);
+                String validationError = validateCustomerInput(name, phone, email);
 
-                if (name == null) {
-                    // Validate: tên không được rỗng
-                    request.setAttribute("error", "Tên khách không được để trống");
+                if (validationError != null) {
+                    request.setAttribute("error", validationError);
 
                 } else if (cdao.updateCustomer(c)) {
                     // UPDATE thành công → redirect về danh sách
@@ -214,7 +217,7 @@ public class CustomerController extends HttpServlet {
                             + safeEncode("Cập nhật khách hàng thành công!");
                 } else {
                     // UPDATE thất bại → lấy lỗi từ DAO
-                    String daoError = cdao.getLastError();
+                    String daoError = normalizeCustomerDaoError(cdao.getLastError());
                     request.setAttribute("error", daoError != null && !daoError.trim().isEmpty()
                             ? daoError
                             : "Cập nhật thất bại");
@@ -264,6 +267,45 @@ public class CustomerController extends HttpServlet {
         }
 
         return "customer.jsp";
+    }
+
+    private String validateCustomerInput(String name, String phone, String email) {
+        if (name == null) {
+            return "Vui lòng nhập tên khách hàng.";
+        }
+        if (name.length() > 100) {
+            return "Tên khách hàng không được vượt quá 100 ký tự.";
+        }
+        if (phone == null) {
+            return "Vui lòng nhập số điện thoại khách hàng.";
+        }
+        if (phone.length() > 15) {
+            return "Số điện thoại không được vượt quá 15 ký tự.";
+        }
+        if (!phone.matches("^[0-9+\\-\\s().]{8,15}$")) {
+            return "Số điện thoại không hợp lệ.";
+        }
+        if (email == null) {
+            return "Vui lòng nhập email khách hàng.";
+        }
+        if (email.length() > 50) {
+            return "Email khách hàng không được vượt quá 50 ký tự.";
+        }
+        if (!EMAIL_PATTERN.matcher(email).matches()) {
+            return "Email không hợp lệ.";
+        }
+        return null;
+    }
+
+    private String normalizeCustomerDaoError(String daoError) {
+        String normalized = trimToNull(daoError);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.toLowerCase().contains("string or binary data would be truncated")) {
+            return "Dữ liệu khách hàng vượt quá giới hạn cho phép. Tên tối đa 100 ký tự, số điện thoại tối đa 15 ký tự, email tối đa 50 ký tự.";
+        }
+        return normalized;
     }
 
     /**

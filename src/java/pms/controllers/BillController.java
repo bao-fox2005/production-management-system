@@ -138,21 +138,69 @@ public class BillController extends HttpServlet {
         try {
             int wo_id = parseIntOrDefault(request.getParameter("wo_id"), 0);
             double total_amount = parseDoubleOrDefault(request.getParameter("total_amount"), 0D);
-
-            if (total_amount <= 0) {
-                request.setAttribute("error", "Tổng tiền phải lớn hơn 0.");
-                ListBill(request);
-                return;
-            }
-
             int customer_id = parseIntOrDefault(request.getParameter("customer_id"), 0);
+            List<BillLineDTO> quoteLines = parseQuoteLines(request);
+
             if (customer_id <= 0) {
+                setBillPopup(request,
+                        "Thiếu khách hàng",
+                        "Vui lòng chọn khách hàng hợp lệ trước khi tạo hóa đơn.",
+                        null,
+                        null,
+                        true);
                 request.setAttribute("error", "Vui lòng chọn khách hàng hợp lệ.");
                 ListBill(request);
                 return;
             }
 
-            List<BillLineDTO> quoteLines = parseQuoteLines(request);
+            if (quoteLines.isEmpty()) {
+                setBillPopup(request,
+                        "Thiếu sản phẩm báo giá",
+                        "Chi tiết báo giá phải có ít nhất 1 sản phẩm hợp lệ với số lượng và đơn giá lớn hơn 0.",
+                        null,
+                        null,
+                        true);
+                request.setAttribute("error", "Chi tiết báo giá phải có ít nhất 1 sản phẩm hợp lệ.");
+                ListBill(request);
+                return;
+            }
+
+            if (total_amount <= 0) {
+                setBillPopup(request,
+                        "Tổng tiền chưa hợp lệ",
+                        "Tổng tiền hóa đơn phải lớn hơn 0. Vui lòng kiểm tra lại số lượng và đơn giá trong chi tiết báo giá.",
+                        null,
+                        null,
+                        true);
+                request.setAttribute("error", "Tổng tiền phải lớn hơn 0.");
+                ListBill(request);
+                return;
+            }
+
+            SystemConfigService configService = new SystemConfigService();
+            if (!configService.hasValidBankReceiverConfig()) {
+                setBillPopup(request,
+                        "Thiếu cấu hình nhận tiền",
+                        "Chưa có thông tin tài khoản nhận tiền hợp lệ để tạo mã QR. Vui lòng cập nhật cấu hình thanh toán trước khi tạo hóa đơn mới.",
+                        "PaymentController?action=list",
+                        "Đi tới quản lý thanh toán",
+                        true);
+                request.setAttribute("error", "Chưa có thông tin nhận tiền hợp lệ để tạo hóa đơn.");
+                ListBill(request);
+                return;
+            }
+
+            if (!configService.hasValidSmtpConfig()) {
+                setBillPopup(request,
+                        "Thiếu cấu hình SMTP",
+                        "Chưa cấu hình SMTP hợp lệ để gửi email hóa đơn cho khách hàng. Vui lòng cập nhật cấu hình email trước khi tạo hóa đơn mới.",
+                        "AdminController",
+                        "Đi tới cấu hình SMTP",
+                        true);
+                request.setAttribute("error", "Chưa cấu hình SMTP hợp lệ để tạo hóa đơn.");
+                ListBill(request);
+                return;
+            }
 
             BillDAO dao = new BillDAO();
             BillDTO bill = new BillDTO(0, wo_id, customer_id, total_amount,
@@ -174,7 +222,7 @@ public class BillController extends HttpServlet {
                         null
                 );
 
-                sendInvoiceEmailPhase1(newBillId, total_amount, customer_id, request, quoteLines, payment);
+                String emailWarning = sendInvoiceEmailPhase1(newBillId, total_amount, customer_id, request, quoteLines, payment);
 
                 String detailLink = "BillController?action=viewBillDetail&bill_id=" + newBillId;
                 String downloadLink = "BillController?action=downloadBill&bill_id=" + newBillId;
@@ -184,6 +232,16 @@ public class BillController extends HttpServlet {
                         + " · "
                         + "<a class='font-semibold underline' href='" + downloadLink + "'>Tải hóa đơn</a>"
                         + (payment != null && payment.getPaymentId() > 0 ? " · QR đã sẵn sàng." : " · Chưa tạo được QR."));
+
+                if (trimToNull(emailWarning) != null) {
+                    setBillPopup(request,
+                            "Không gửi được email cho khách hàng",
+                            emailWarning,
+                            "AdminController",
+                            "Kiểm tra cấu hình SMTP",
+                            false);
+                    request.setAttribute("error", emailWarning);
+                }
             } else {
                 request.setAttribute("error", "Tạo hóa đơn thất bại.");
             }
@@ -449,7 +507,37 @@ public class BillController extends HttpServlet {
             response.getWriter().write("{\"success\":false,\"message\":\"Vui lòng nhập tên khách hàng.\"}");
             return;
         }
-        if (customerEmail != null && !EMAIL_PATTERN.matcher(customerEmail).matches()) {
+        if (customerName.length() > 100) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Tên khách hàng không được vượt quá 100 ký tự.\"}");
+            return;
+        }
+        if (customerPhone == null) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Vui lòng nhập số điện thoại khách hàng.\"}");
+            return;
+        }
+        if (customerPhone.length() > 15) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Số điện thoại không được vượt quá 15 ký tự.\"}");
+            return;
+        }
+        if (!customerPhone.matches("^[0-9+\\-\\s().]{8,15}$")) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Số điện thoại không hợp lệ.\"}");
+            return;
+        }
+        if (customerEmail == null) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Vui lòng nhập email khách hàng.\"}");
+            return;
+        }
+        if (customerEmail.length() > 50) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Email khách hàng không được vượt quá 50 ký tự.\"}");
+            return;
+        }
+        if (!EMAIL_PATTERN.matcher(customerEmail).matches()) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             response.getWriter().write("{\"success\":false,\"message\":\"Email không hợp lệ.\"}");
             return;
@@ -468,8 +556,13 @@ public class BillController extends HttpServlet {
 
         boolean inserted = customerDAO.insertCustomer(new CustomerDTO(0, customerName, customerPhone, customerEmail));
         if (!inserted) {
+            String daoError = trimToNull(customerDAO.getLastError());
+            String message = "Không thể tạo khách hàng mới.";
+            if (daoError != null && daoError.toLowerCase().contains("string or binary data would be truncated")) {
+                message = "Dữ liệu khách hàng vượt quá giới hạn cho phép của hệ thống. Tên tối đa 100 ký tự, số điện thoại tối đa 15 ký tự, email tối đa 50 ký tự.";
+            }
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            response.getWriter().write("{\"success\":false,\"message\":\"Không thể tạo khách hàng mới.\"}");
+            response.getWriter().write("{\"success\":false,\"message\":\"" + escapeJson(message) + "\"}");
             return;
         }
 
@@ -560,19 +653,22 @@ public class BillController extends HttpServlet {
         }
     }
 
-    private void sendInvoiceEmailPhase1(int billId, double totalAmount, int customerId,
+    private String sendInvoiceEmailPhase1(int billId, double totalAmount, int customerId,
             HttpServletRequest request, List<BillLineDTO> quoteLines, PaymentDTO payment) {
         try {
             CustomerDAO customerDAO = new CustomerDAO();
             CustomerDTO customer = customerDAO.SearchByCustomerID(String.valueOf(customerId));
-            if (customer == null || trimToNull(customer.getEmail()) == null) {
-                return;
+            if (customer == null) {
+                return "Không tìm thấy thông tin khách hàng để gửi email hóa đơn.";
+            }
+            if (trimToNull(customer.getEmail()) == null) {
+                return "Hóa đơn đã tạo nhưng chưa gửi được email cho khách hàng vì khách hàng chưa có email nhận hóa đơn. Vui lòng kiểm tra lại email khách hàng.";
             }
 
             SystemConfigService config = new SystemConfigService();
             EmailService emailService = config.createEmailService();
-            if (!emailService.isConfigured()) {
-                return;
+            if (!config.hasValidSmtpConfig() || !emailService.isConfigured()) {
+                return "Hóa đơn đã tạo nhưng chưa gửi được email cho khách hàng. Vui lòng kiểm tra lại cấu hình SMTP gửi mail.";
             }
 
             String baseUrl = buildBaseUrl(request);
@@ -595,7 +691,6 @@ public class BillController extends HttpServlet {
             } else if ("EXPIRED".equals(paymentStatus)) {
                 paymentStatusLabel = "Hết hạn";
             }
-
 
             normalizeBillLineDisplayNames(quoteLines, bill != null ? bill.getWo_id() : 0);
 
@@ -647,10 +742,15 @@ public class BillController extends HttpServlet {
             );
 
             if (!sent) {
-                request.setAttribute("msg", "Tạo hóa đơn thành công nhưng chưa gửi được email yêu cầu thanh toán.");
+                String lastError = trimToNull(emailService.getLastError());
+                return "Hóa đơn đã tạo nhưng chưa gửi được email cho khách hàng. Vui lòng kiểm tra lại email khách hàng hoặc cấu hình SMTP."
+                        + (lastError != null ? " Chi tiết: " + lastError : "");
             }
-        } catch (Exception ignored) {
-            // Không chặn luồng tạo Bill nếu email lỗi
+            return null;
+        } catch (Exception e) {
+            String message = trimToNull(e.getMessage());
+            return "Hóa đơn đã tạo nhưng phát sinh lỗi khi gửi email cho khách hàng. Vui lòng kiểm tra lại email khách hàng hoặc cấu hình SMTP."
+                    + (message != null ? " Chi tiết: " + message : "");
         }
     }
 
@@ -783,6 +883,15 @@ public class BillController extends HttpServlet {
         if (value == null) return null;
         String s = value.trim();
         return s.isEmpty() ? null : s;
+    }
+
+    private void setBillPopup(HttpServletRequest request, String title, String message,
+            String actionUrl, String actionLabel, boolean reopenModal) {
+        request.setAttribute("billPopupTitle", title);
+        request.setAttribute("billPopupMessage", message);
+        request.setAttribute("billPopupActionUrl", actionUrl);
+        request.setAttribute("billPopupActionLabel", actionLabel);
+        request.setAttribute("billPopupReopenModal", reopenModal);
     }
 
     private String resolveBankName(String bankBin) {
