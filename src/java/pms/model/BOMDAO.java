@@ -41,11 +41,16 @@ public class BOMDAO {
                 + "FROM BOM b "
                 + "LEFT JOIN Item i ON b.product_item_id = i.item_id "
                 + "ORDER BY b.created_date DESC";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql);
-                ResultSet rs = ps.executeQuery()) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql);  ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                list.add(mapBOM(rs));
+                // 1. Tạo đối tượng BOM từ ResultSet
+                BOMDTO bom = mapBOM(rs);
+
+                // 2. GỌI HÀM LẤY CHI TIẾT NGUYÊN LIỆU VÀ GẮN VÀO BOM
+                bom.setDetails(getBOMDetails(bom.getBomId()));
+
+                // 3. Thêm vào danh sách
+                list.add(bom);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -54,9 +59,9 @@ public class BOMDAO {
     }
 
     /**
-     * Lấy danh sách BOM đang hoạt động (status = 'active').
-     * Dùng cho các màn hình vận hành như Tạo Lệnh Sản Xuất để ẩn
-     * các BOM đã "Ngừng sử dụng" mà không xóa dữ liệu lịch sử.
+     * Lấy danh sách BOM đang hoạt động (status = 'active'). Dùng cho các màn
+     * hình vận hành như Tạo Lệnh Sản Xuất để ẩn các BOM đã "Ngừng sử dụng" mà
+     * không xóa dữ liệu lịch sử.
      */
     public List<BOMDTO> getActiveBOMS() {
         List<BOMDTO> list = new ArrayList<>();
@@ -65,9 +70,7 @@ public class BOMDAO {
                 + "LEFT JOIN Item i ON b.product_item_id = i.item_id "
                 + "WHERE b.status = 'active' "
                 + "ORDER BY b.created_date DESC";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql);
-                ResultSet rs = ps.executeQuery()) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql);  ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 list.add(mapBOM(rs));
             }
@@ -84,10 +87,9 @@ public class BOMDAO {
                 + "LEFT JOIN Item i ON b.product_item_id = i.item_id "
                 + "WHERE b.product_item_id = ? "
                 + "ORDER BY b.created_date DESC";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, productItemId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     list.add(mapBOM(rs));
                 }
@@ -105,10 +107,9 @@ public class BOMDAO {
                 + "LEFT JOIN Item i ON b.product_item_id = i.item_id "
                 + "WHERE b.status = ? "
                 + "ORDER BY b.created_date DESC";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, status);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     list.add(mapBOM(rs));
                 }
@@ -124,10 +125,9 @@ public class BOMDAO {
                 + "FROM BOM b "
                 + "LEFT JOIN Item i ON b.product_item_id = i.item_id "
                 + "WHERE b.bom_id = ?";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, bomId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     BOMDTO bom = mapBOM(rs);
                     bom.setDetails(getBOMDetails(bomId));
@@ -146,10 +146,9 @@ public class BOMDAO {
                 + "FROM BOM_Detail bd "
                 + "LEFT JOIN Item i ON bd.material_item_id = i.item_id "
                 + "WHERE bd.bom_id = ?";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, bomId);
-            try (ResultSet rs = ps.executeQuery()) {
+            try ( ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     list.add(mapBOMDetail(rs));
                 }
@@ -162,15 +161,14 @@ public class BOMDAO {
 
     public boolean insertBOM(BOMDTO bom) {
         String sql = "INSERT INTO BOM (product_item_id, bom_version, status, notes) VALUES (?, ?, ?, ?)";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, bom.getProductItemId());
             ps.setString(2, bom.getBomVersion());
             ps.setString(3, bom.getStatus() != null ? bom.getStatus() : "active");
             ps.setString(4, bom.getNotes());
             int rows = ps.executeUpdate();
             if (rows > 0) {
-                try (ResultSet rs = ps.getGeneratedKeys()) {
+                try ( ResultSet rs = ps.getGeneratedKeys()) {
                     if (rs.next()) {
                         bom.setBomId(rs.getInt(1));
                     }
@@ -185,8 +183,7 @@ public class BOMDAO {
 
     public boolean updateBOM(BOMDTO bom) {
         String sql = "UPDATE BOM SET product_item_id = ?, bom_version = ?, status = ?, notes = ? WHERE bom_id = ?";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, bom.getProductItemId());
             ps.setString(2, bom.getBomVersion());
             ps.setString(3, bom.getStatus());
@@ -201,8 +198,7 @@ public class BOMDAO {
 
     public boolean deleteBOM(int bomId) {
         String sqlDetail = "DELETE FROM BOM_Detail WHERE bom_id = ?";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sqlDetail)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sqlDetail)) {
             ps.setInt(1, bomId);
             ps.executeUpdate();
         } catch (Exception e) {
@@ -211,8 +207,7 @@ public class BOMDAO {
         }
 
         String sqlBom = "DELETE FROM BOM WHERE bom_id = ?";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sqlBom)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sqlBom)) {
             ps.setInt(1, bomId);
             return ps.executeUpdate() > 0;
         } catch (Exception e) {
@@ -223,8 +218,7 @@ public class BOMDAO {
 
     public boolean addBOMDetail(BOMDetailDTO detail) {
         String sql = "INSERT INTO BOM_Detail (bom_id, material_item_id, quantity_required, unit, waste_percent, notes) VALUES (?, ?, ?, ?, ?, ?)";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, detail.getBomId());
             ps.setInt(2, detail.getMaterialItemId());
             ps.setDouble(3, detail.getQuantityRequired());
@@ -240,8 +234,7 @@ public class BOMDAO {
 
     public boolean updateBOMDetail(BOMDetailDTO detail) {
         String sql = "UPDATE BOM_Detail SET material_item_id = ?, quantity_required = ?, unit = ?, waste_percent = ?, notes = ? WHERE bom_detail_id = ?";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, detail.getMaterialItemId());
             ps.setDouble(2, detail.getQuantityRequired());
             ps.setString(3, detail.getUnit());
@@ -257,8 +250,7 @@ public class BOMDAO {
 
     public boolean deleteBOMDetail(int detailId) {
         String sql = "DELETE FROM BOM_Detail WHERE bom_detail_id = ?";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, detailId);
             return ps.executeUpdate() > 0;
         } catch (Exception e) {
@@ -269,8 +261,7 @@ public class BOMDAO {
 
     public boolean deleteBOMDetailsByBomId(int bomId) {
         String sql = "DELETE FROM BOM_Detail WHERE bom_id = ?";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, bomId);
             ps.executeUpdate();
             return true;
@@ -310,8 +301,7 @@ public class BOMDAO {
 
     public boolean updateStatus(int bomId, String status) {
         String sql = "UPDATE BOM SET status = ? WHERE bom_id = ?";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
+        try ( Connection conn = DBUtils.getConnection();  PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, status);
             ps.setInt(2, bomId);
             return ps.executeUpdate() > 0;

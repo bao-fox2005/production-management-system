@@ -266,7 +266,7 @@
                                         </div>
                                         <div>
                                             <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Số lượng</label>
-                                            <input type="number" step="0.01" min="0.01" name="quantityRequired[]" value="<%= detail.getQuantityRequired() > 0 ? detail.getQuantityRequired() : "" %>" required class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-teal-400">
+                                            <input type="number" step="1" min="1" name="quantityRequired[]" value="<%= detail.getQuantityRequired() > 0 ? (int) detail.getQuantityRequired() : "" %>" required class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-teal-400">
                                         </div>
                                         <div class="md:col-span-2">
                                             <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Ghi chú dòng nguyên liệu</label>
@@ -315,7 +315,7 @@
                 </div>
                 <div>
                     <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Số lượng</label>
-                    <input type="number" step="0.01" min="0.01" name="quantityRequired[]" required class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-teal-400">
+                    <input type="number" step="1" min="1" name="quantityRequired[]" placeholder="Ví dụ: 2" required class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-teal-400">
                 </div>
                 <div class="md:col-span-2">
                     <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">Ghi chú dòng nguyên liệu</label>
