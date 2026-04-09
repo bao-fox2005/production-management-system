@@ -196,7 +196,7 @@
                 </div>
                 <% } %>
                 <% if (error != null && !error.isEmpty()) { %>
-                <div class="mb-6 p-4 rounded-2xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300 flex items-center gap-3 shadow-sm">
+                <div class="mb-6 hidden rounded-2xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300 items-center gap-3 shadow-sm p-4">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
@@ -344,7 +344,7 @@
                     </svg>
                 </button>
             </div>
-            <form action="CustomerController" method="post" class="space-y-5 px-6 py-6">
+            <form id="customerForm" action="CustomerController" method="post" class="space-y-5 px-6 py-6" novalidate>
                 <input type="hidden" name="action" value="<%= "update".equals(mode) ? "saveUpdateCustomer" : "saveAddCustomer" %>">
                 <% if ("update".equals(mode) && customer != null) { %>
                 <input type="hidden" name="id" value="<%= customer.getCustomer_id() %>">
@@ -355,16 +355,16 @@
                 <% } %>
                 <div>
                     <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Tên khách <span class="text-red-500">*</span></label>
-                    <input type="text" name="customer_name" required class="form-input w-full rounded-2xl border px-4 py-3" placeholder="Nhập tên khách hoặc doanh nghiệp" value="<%= customer != null && customer.getCustomer_name() != null ? customer.getCustomer_name() : "" %>">
+                    <input type="text" name="customer_name" required maxlength="100" class="form-input w-full rounded-2xl border px-4 py-3" placeholder="Nhập tên khách hoặc doanh nghiệp" value="<%= customer != null && customer.getCustomer_name() != null ? customer.getCustomer_name() : "" %>">
                 </div>
                 <div class="grid gap-5 sm:grid-cols-2">
                     <div>
-                        <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Số điện thoại</label>
-                        <input type="text" name="phone" class="form-input w-full rounded-2xl border px-4 py-3" placeholder="Ví dụ: 0912345678" value="<%= customer != null && customer.getPhone() != null ? customer.getPhone() : "" %>">
+                        <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Số điện thoại <span class="text-red-500">*</span></label>
+                        <input type="text" name="phone" required maxlength="15" class="form-input w-full rounded-2xl border px-4 py-3" placeholder="Ví dụ: 0912345678" value="<%= customer != null && customer.getPhone() != null ? customer.getPhone() : "" %>">
                     </div>
                     <div>
-                        <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
-                        <input type="email" name="email" class="form-input w-full rounded-2xl border px-4 py-3" placeholder="email@example.com" value="<%= customer != null && customer.getEmail() != null ? customer.getEmail() : "" %>">
+                        <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">Email <span class="text-red-500">*</span></label>
+                        <input type="email" name="email" required maxlength="50" class="form-input w-full rounded-2xl border px-4 py-3" placeholder="email@example.com" value="<%= customer != null && customer.getEmail() != null ? customer.getEmail() : "" %>">
                     </div>
                 </div>
                 <div class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end dark:border-slate-700">
@@ -374,6 +374,8 @@
             </form>
         </div>
     </div>
+
+    <div id="customerServerError" class="hidden"><%= error != null ? error : "" %></div>
 
     <div id="deleteCustomerModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
         <div class="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
@@ -402,9 +404,70 @@
     <script>
         const customerModal = document.getElementById('customerModal');
         const deleteCustomerModal = document.getElementById('deleteCustomerModal');
+        const customerForm = document.getElementById('customerForm');
         const customerEditMode = customerModal && customerModal.dataset.editMode === 'true';
-        const shouldReopenCustomerModal = Boolean('<%= (error != null && !error.isEmpty() && !"update".equals(mode)) ? "true" : "" %>');
+        const shouldReopenCustomerModal = Boolean('<%= (error != null && !error.isEmpty()) ? "true" : "" %>');
         const customerListUrl = 'CustomerController?action=listCustomer';
+
+        function showCustomerPopup(message) {
+            if (!message) return;
+            const safeMessage = String(message);
+            window.alert(safeMessage);
+        }
+
+        function validateCustomerForm() {
+            if (!customerForm) {
+                return true;
+            }
+            const nameInput = customerForm.querySelector('input[name="customer_name"]');
+            const phoneInput = customerForm.querySelector('input[name="phone"]');
+            const emailInput = customerForm.querySelector('input[name="email"]');
+            const customerName = nameInput ? nameInput.value.trim() : '';
+            const phone = phoneInput ? phoneInput.value.trim() : '';
+            const email = emailInput ? emailInput.value.trim() : '';
+
+            if (!customerName) {
+                showCustomerPopup('Vui lòng nhập tên khách hàng.');
+                if (nameInput) nameInput.focus();
+                return false;
+            }
+            if (customerName.length > 100) {
+                showCustomerPopup('Tên khách hàng không được vượt quá 100 ký tự.');
+                if (nameInput) nameInput.focus();
+                return false;
+            }
+            if (!phone) {
+                showCustomerPopup('Vui lòng nhập số điện thoại khách hàng.');
+                if (phoneInput) phoneInput.focus();
+                return false;
+            }
+            if (phone.length > 15) {
+                showCustomerPopup('Số điện thoại không được vượt quá 15 ký tự.');
+                if (phoneInput) phoneInput.focus();
+                return false;
+            }
+            if (!/^[0-9+\-\s().]{8,15}$/.test(phone)) {
+                showCustomerPopup('Số điện thoại không hợp lệ.');
+                if (phoneInput) phoneInput.focus();
+                return false;
+            }
+            if (!email) {
+                showCustomerPopup('Vui lòng nhập email khách hàng.');
+                if (emailInput) emailInput.focus();
+                return false;
+            }
+            if (email.length > 50) {
+                showCustomerPopup('Email khách hàng không được vượt quá 50 ký tự.');
+                if (emailInput) emailInput.focus();
+                return false;
+            }
+            if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email)) {
+                showCustomerPopup('Email không hợp lệ.');
+                if (emailInput) emailInput.focus();
+                return false;
+            }
+            return true;
+        }
 
         function openCustomerModal() {
             if (!customerModal) return;
@@ -464,8 +527,22 @@
             }
         });
 
+        if (customerForm) {
+            customerForm.addEventListener('submit', function(event) {
+                if (!validateCustomerForm()) {
+                    event.preventDefault();
+                }
+            });
+        }
+
         if (customerEditMode || shouldReopenCustomerModal) {
             openCustomerModal();
+        }
+
+        const customerServerErrorElement = document.getElementById('customerServerError');
+        const customerServerError = customerServerErrorElement ? customerServerErrorElement.textContent.trim() : '';
+        if (customerServerError) {
+            showCustomerPopup(customerServerError);
         }
     </script>
 </body>

@@ -10,6 +10,7 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.Serializable;
+import java.net.URL;
 import java.net.URLEncoder;
 import java.util.Base64;
 import java.util.EnumMap;
@@ -46,6 +47,34 @@ public class QrCodeGenerator implements Serializable {
             throw new RuntimeException("Loi tao QR code: " + e.getMessage(), e);
         } finally {
             if (baos != null) { try { baos.close(); } catch (Exception ignored) {} }
+        }
+    }
+
+    public String imageUrlToBase64(String imageUrl) {
+        if (imageUrl == null || imageUrl.trim().isEmpty()) {
+            throw new IllegalArgumentException("Image URL khong duoc null hoac rong.");
+        }
+
+        ByteArrayOutputStream baos = null;
+        java.io.InputStream in = null;
+        try {
+            in = new URL(imageUrl.trim()).openStream();
+            BufferedImage image = ImageIO.read(in);
+            if (image == null) {
+                throw new IllegalArgumentException("Khong doc duoc anh QR tu URL.");
+            }
+            baos = new ByteArrayOutputStream();
+            ImageIO.write(image, "PNG", baos);
+            return Base64.getEncoder().encodeToString(baos.toByteArray());
+        } catch (Exception e) {
+            throw new RuntimeException("Loi lay anh QR tu VietQR: " + e.getMessage(), e);
+        } finally {
+            if (in != null) {
+                try { in.close(); } catch (Exception ignored) {}
+            }
+            if (baos != null) {
+                try { baos.close(); } catch (Exception ignored) {}
+            }
         }
     }
 

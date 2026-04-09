@@ -1,22 +1,36 @@
 package pms.controllers;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import pms.model.BillDAO;
 import pms.model.BillDTO;
+import pms.model.BillLineDAO;
+import pms.model.BillLineDTO;
 import pms.model.CustomerDAO;
 import pms.model.CustomerDTO;
+import pms.model.ItemDAO;
+import pms.model.ItemDTO;
 import pms.model.PaymentDAO;
 import pms.model.PaymentDTO;
 import pms.model.WorkOrderDAO;
 import pms.model.WorkOrderDTO;
+import pms.utils.EmailService;
+import pms.utils.PaymentService;
+import pms.utils.PdfInvoiceExporter;
+import pms.utils.SystemConfigService;
 
 /**
  * BillController – Servlet quản lý Hóa Đơn (Bill).
@@ -76,6 +90,21 @@ public class BillController extends HttpServlet {
             case "searchBill":
                 SearchBill(request); // Tìm kiếm hóa đơn theo từ khóa
                 break;
+            case "viewBillDetail":
+                viewBillDetail(request, response, false);
+                return;
+            case "downloadBill":
+                downloadBill(request, response, false);
+                return;
+            case "viewPublicBill":
+                viewBillDetail(request, response, true);
+                return;
+            case "downloadPublicBill":
+                downloadBill(request, response, true);
+                return;
+            case "addCustomerForBill":
+                addCustomerForBill(request, response);
+                return;
         }
 
         // Tất cả action đều forward về bill.jsp (url được set bởi populateBillPageData)
@@ -107,42 +136,120 @@ public class BillController extends HttpServlet {
      */
     private void AddBill(HttpServletRequest request) {
         try {
-            int wo_id          = Integer.parseInt(request.getParameter("wo_id"));       // ID lệnh sản xuất liên kết
-            int customer_id    = Integer.parseInt(request.getParameter("customer_id")); // ID khách hàng
-            double total_amount = Double.parseDouble(request.getParameter("total_amount")); // Tổng tiền
+            int wo_id = parseIntOrDefault(request.getParameter("wo_id"), 0);
+            double total_amount = parseDoubleOrDefault(request.getParameter("total_amount"), 0D);
+            int customer_id = parseIntOrDefault(request.getParameter("customer_id"), 0);
+            List<BillLineDTO> quoteLines = parseQuoteLines(request);
 
-            // Validate: phải chọn work order hợp lệ
-            if (wo_id <= 0) {
-                request.setAttribute("error", "Vui lòng chọn lệnh sản xuất hợp lệ.");
+            if (customer_id <= 0) {
+                setBillPopup(request,
+                        "Thiếu khách hàng",
+                        "Vui lòng chọn khách hàng hợp lệ trước khi tạo hóa đơn.",
+                        null,
+                        null,
+                        true);
+                request.setAttribute("error", "Vui lòng chọn khách hàng hợp lệ.");
                 ListBill(request);
                 return;
             }
 
-            // Validate: tổng tiền phải dương
+            if (quoteLines.isEmpty()) {
+                setBillPopup(request,
+                        "Thiếu sản phẩm báo giá",
+                        "Chi tiết báo giá phải có ít nhất 1 sản phẩm hợp lệ với số lượng và đơn giá lớn hơn 0.",
+                        null,
+                        null,
+                        true);
+                request.setAttribute("error", "Chi tiết báo giá phải có ít nhất 1 sản phẩm hợp lệ.");
+                ListBill(request);
+                return;
+            }
+
             if (total_amount <= 0) {
+                setBillPopup(request,
+                        "Tổng tiền chưa hợp lệ",
+                        "Tổng tiền hóa đơn phải lớn hơn 0. Vui lòng kiểm tra lại số lượng và đơn giá trong chi tiết báo giá.",
+                        null,
+                        null,
+                        true);
                 request.setAttribute("error", "Tổng tiền phải lớn hơn 0.");
                 ListBill(request);
                 return;
             }
 
-            BillDAO dao = new BillDAO();
-            // Tạo BillDTO: id=0 (DB tự sinh), ngày tạo = ngày hiện tại
-            BillDTO bill = new BillDTO(0, wo_id, customer_id, total_amount,
-                    new java.sql.Date(System.currentTimeMillis()));
+            SystemConfigService configService = new SystemConfigService();
+            if (!configService.hasValidBankReceiverConfig()) {
+                setBillPopup(request,
+                        "Thiếu cấu hình nhận tiền",
+                        "Hệ thống chưa đọc được tài khoản nhận tiền hợp lệ để tạo mã QR cho hóa đơn. Vui lòng mở phần quản lý thanh toán, lưu lại tài khoản nhận tiền đang hoạt động rồi thử lại.",
+                        "PaymentController?action=list",
+                        "Đi tới quản lý thanh toán",
+                        true);
+                request.setAttribute("error", "Hệ thống chưa đọc được tài khoản nhận tiền hợp lệ để tạo hóa đơn.");
+                ListBill(request);
+                return;
+            }
 
-            boolean result = dao.InsertBill(bill); // Lưu vào DB
-            if (result) {
-                request.setAttribute("msg", "Tạo hóa đơn thành công.");
+            if (!configService.hasValidSmtpConfig()) {
+                setBillPopup(request,
+                        "Thiếu cấu hình SMTP",
+                        "Chưa cấu hình SMTP hợp lệ để gửi email hóa đơn cho khách hàng. Vui lòng cập nhật cấu hình email trước khi tạo hóa đơn mới.",
+                        "AdminController",
+                        "Đi tới cấu hình SMTP",
+                        true);
+                request.setAttribute("error", "Chưa cấu hình SMTP hợp lệ để tạo hóa đơn.");
+                ListBill(request);
+                return;
+            }
+
+            BillDAO dao = new BillDAO();
+            BillDTO bill = new BillDTO(0, wo_id, customer_id, total_amount,
+                    new java.sql.Date(System.currentTimeMillis()),
+                    "pending",
+                    new Timestamp(System.currentTimeMillis()),
+                    null,
+                    null,
+                    quoteLines);
+
+            int newBillId = dao.insertBillWithLines(bill, quoteLines);
+            if (newBillId > 0) {
+                PaymentService paymentService = new PaymentService();
+                PaymentDTO payment = paymentService.createQrPayment(
+                        newBillId,
+                        total_amount,
+                        1440,
+                        null,
+                        null
+                );
+
+                String emailWarning = sendInvoiceEmailPhase1(newBillId, total_amount, customer_id, request, quoteLines, payment);
+
+                String detailLink = "BillController?action=viewBillDetail&bill_id=" + newBillId;
+                String downloadLink = "BillController?action=downloadBill&bill_id=" + newBillId;
+                request.setAttribute("msg",
+                        "Tạo hóa đơn thành công. "
+                        + "<a class='font-semibold underline' href='" + detailLink + "'>Xem chi tiết</a>"
+                        + " · "
+                        + "<a class='font-semibold underline' href='" + downloadLink + "'>Tải hóa đơn</a>"
+                        + (payment != null && payment.getPaymentId() > 0 ? " · QR đã sẵn sàng." : " · Chưa tạo được QR."));
+
+                if (trimToNull(emailWarning) != null) {
+                    setBillPopup(request,
+                            "Không gửi được email cho khách hàng",
+                            emailWarning,
+                            "AdminController",
+                            "Kiểm tra cấu hình SMTP",
+                            false);
+                    request.setAttribute("error", emailWarning);
+                }
             } else {
                 request.setAttribute("error", "Tạo hóa đơn thất bại.");
             }
 
         } catch (Exception e) {
-            // Lỗi parse số hoặc lỗi DB
             request.setAttribute("error", "Không thể tạo hóa đơn: " + e.getMessage());
         }
 
-        // Luôn tải lại danh sách sau khi xử lý
         ListBill(request);
     }
 
@@ -255,10 +362,12 @@ public class BillController extends HttpServlet {
         WorkOrderDAO workOrderDAO = new WorkOrderDAO();
         CustomerDAO customerDAO   = new CustomerDAO();
         PaymentDAO paymentDAO     = new PaymentDAO();
+        PaymentService paymentService = new PaymentService();
 
-        // Tải danh sách WO và Customer để điền dropdown
+        // Tải danh sách WO, Customer và Item để điền dropdown
         List<WorkOrderDTO> workOrders = workOrderDAO.getAllWorkOrders();
         List<CustomerDTO> customers   = customerDAO.getAllCustomers();
+        List<ItemDTO> items           = new ItemDAO().getAllItems();
 
         // Tạo Map để JSP có thể tra cứu O(1) thay vì duyệt list O(n)
         Map<Integer, WorkOrderDTO> workOrderMap = new HashMap<>();
@@ -278,6 +387,21 @@ public class BillController extends HttpServlet {
         // Với mỗi hóa đơn, lấy payment mới nhất và kiểm tra hết hạn
         for (BillDTO bill : billList) {
             PaymentDTO latestPayment = paymentDAO.getLatestPaymentByBillId(bill.getBill_id());
+
+            // Nếu bill chưa có payment thì tự tạo QR để màn hình luôn có Xem QR / Xác nhận / Tạo lại
+            if (latestPayment == null && !"paid".equalsIgnoreCase(bill.getStatus())) {
+                try {
+                    latestPayment = paymentService.createQrPayment(
+                            bill.getBill_id(),
+                            bill.getTotal_amount(),
+                            1440,
+                            null,
+                            null
+                    );
+                } catch (Exception ignored) {
+                    latestPayment = paymentDAO.getLatestPaymentByBillId(bill.getBill_id());
+                }
+            }
 
             // Kiểm tra nếu payment đã hết hạn nhưng chưa được cập nhật status → tự động cập nhật EXPIRED
             if (latestPayment != null
@@ -300,6 +424,7 @@ public class BillController extends HttpServlet {
         request.setAttribute("workOrderMap",     workOrderMap);
         request.setAttribute("customerMap",      customerMap);
         request.setAttribute("latestPaymentMap", latestPaymentMap);
+        request.setAttribute("items",            new ArrayList<>(items));
         url = "bill.jsp"; // Trang JSP hiển thị danh sách hóa đơn
     }
 
@@ -365,6 +490,447 @@ public class BillController extends HttpServlet {
         }
 
         return filtered;
+    }
+
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
+
+    private void addCustomerForBill(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setCharacterEncoding("UTF-8");
+        response.setContentType("application/json;charset=UTF-8");
+
+        String customerName = trimToNull(request.getParameter("customer_name"));
+        String customerPhone = trimToNull(request.getParameter("phone"));
+        String customerEmail = trimToNull(request.getParameter("email"));
+
+        if (customerName == null) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Vui lòng nhập tên khách hàng.\"}");
+            return;
+        }
+        if (customerName.length() > 100) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Tên khách hàng không được vượt quá 100 ký tự.\"}");
+            return;
+        }
+        if (customerPhone == null) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Vui lòng nhập số điện thoại khách hàng.\"}");
+            return;
+        }
+        if (customerPhone.length() > 15) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Số điện thoại không được vượt quá 15 ký tự.\"}");
+            return;
+        }
+        if (!customerPhone.matches("^[0-9+\\-\\s().]{8,15}$")) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Số điện thoại không hợp lệ.\"}");
+            return;
+        }
+        if (customerEmail == null) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Vui lòng nhập email khách hàng.\"}");
+            return;
+        }
+        if (customerEmail.length() > 50) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Email khách hàng không được vượt quá 50 ký tự.\"}");
+            return;
+        }
+        if (!EMAIL_PATTERN.matcher(customerEmail).matches()) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"success\":false,\"message\":\"Email không hợp lệ.\"}");
+            return;
+        }
+
+        CustomerDAO customerDAO = new CustomerDAO();
+        if (customerEmail != null) {
+            CustomerDTO existed = customerDAO.SearchByCustomerEmail(customerEmail);
+            if (existed != null && existed.getCustomer_id() > 0) {
+                response.getWriter().write("{\"success\":true,\"customerId\":" + existed.getCustomer_id()
+                        + ",\"customerName\":\"" + escapeJson(existed.getCustomer_name())
+                        + "\",\"message\":\"Email đã tồn tại, đã chọn khách hàng hiện có.\"}");
+                return;
+            }
+        }
+
+        boolean inserted = customerDAO.insertCustomer(new CustomerDTO(0, customerName, customerPhone, customerEmail));
+        if (!inserted) {
+            String daoError = trimToNull(customerDAO.getLastError());
+            String message = "Không thể tạo khách hàng mới.";
+            if (daoError != null && daoError.toLowerCase().contains("string or binary data would be truncated")) {
+                message = "Dữ liệu khách hàng vượt quá giới hạn cho phép của hệ thống. Tên tối đa 100 ký tự, số điện thoại tối đa 15 ký tự, email tối đa 50 ký tự.";
+            }
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("{\"success\":false,\"message\":\"" + escapeJson(message) + "\"}");
+            return;
+        }
+
+        CustomerDTO created = customerEmail != null
+                ? customerDAO.SearchByCustomerEmail(customerEmail)
+                : customerDAO.searchCustomers(customerName).stream().findFirst().orElse(null);
+
+        if (created == null || created.getCustomer_id() <= 0) {
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("{\"success\":false,\"message\":\"Tạo khách hàng thành công nhưng không đọc được dữ liệu trả về.\"}");
+            return;
+        }
+
+        response.getWriter().write("{\"success\":true,\"customerId\":" + created.getCustomer_id()
+                + ",\"customerName\":\"" + escapeJson(created.getCustomer_name()) + "\"}");
+    }
+
+    private List<BillLineDTO> parseQuoteLines(HttpServletRequest request) {
+        List<BillLineDTO> lines = new ArrayList<>();
+
+        String[] itemTypes = request.getParameterValues("line_item_type");
+        String[] quantities = request.getParameterValues("line_quantity");
+        String[] unitPrices = request.getParameterValues("line_unit_price");
+
+        if (itemTypes == null || quantities == null || unitPrices == null) {
+            return lines;
+        }
+
+        ItemDAO itemDAO = new ItemDAO();
+        int max = Math.min(itemTypes.length, Math.min(quantities.length, unitPrices.length));
+        for (int i = 0; i < max; i++) {
+            String rawItemValue = trimToNull(itemTypes[i]);
+            int qty = parseIntOrDefault(quantities[i], 0);
+            double unitPrice = parseDoubleOrDefault(unitPrices[i], 0D);
+            if (rawItemValue == null || qty <= 0 || unitPrice <= 0) {
+                continue;
+            }
+
+            String itemName = rawItemValue;
+            if (Pattern.matches("\\d+", rawItemValue)) {
+                ItemDTO item = itemDAO.SearchByID(rawItemValue);
+                if (item != null && trimToNull(item.getItemName()) != null) {
+                    itemName = item.getItemName().trim();
+                }
+            }
+
+            if (trimToNull(itemName) == null) {
+                continue;
+            }
+
+            double lineTotal = BigDecimal.valueOf(unitPrice)
+                    .multiply(BigDecimal.valueOf(qty))
+                    .doubleValue();
+            lines.add(new BillLineDTO(0, 0, itemName, qty, unitPrice, lineTotal, null));
+        }
+
+        return lines;
+    }
+
+    private void normalizeBillLineDisplayNames(List<BillLineDTO> lines, int woId) {
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+
+        String fallbackProductName = null;
+        if (woId > 0) {
+            WorkOrderDTO workOrder = new WorkOrderDAO().searchById(woId);
+            if (workOrder != null && trimToNull(workOrder.getProductName()) != null) {
+                fallbackProductName = workOrder.getProductName().trim();
+            }
+        }
+
+        for (BillLineDTO line : lines) {
+            if (line == null) {
+                continue;
+            }
+            String rawName = trimToNull(line.getItemType());
+            if (rawName == null) {
+                continue;
+            }
+            String normalized = rawName.toLowerCase().replaceAll("\\s+", "");
+            boolean isGenericProduct = "sanpham".equals(normalized)
+                    || "sảnphẩm".equals(normalized)
+                    || "product".equals(normalized);
+            if (isGenericProduct && fallbackProductName != null) {
+                line.setItemType(fallbackProductName);
+            }
+        }
+    }
+
+    private String sendInvoiceEmailPhase1(int billId, double totalAmount, int customerId,
+            HttpServletRequest request, List<BillLineDTO> quoteLines, PaymentDTO payment) {
+        try {
+            CustomerDAO customerDAO = new CustomerDAO();
+            CustomerDTO customer = customerDAO.SearchByCustomerID(String.valueOf(customerId));
+            if (customer == null) {
+                return "Không tìm thấy thông tin khách hàng để gửi email hóa đơn.";
+            }
+            if (trimToNull(customer.getEmail()) == null) {
+                return "Hóa đơn đã tạo nhưng chưa gửi được email cho khách hàng vì khách hàng chưa có email nhận hóa đơn. Vui lòng kiểm tra lại email khách hàng.";
+            }
+
+            SystemConfigService config = new SystemConfigService();
+            EmailService emailService = config.createEmailService();
+            if (!config.hasValidSmtpConfig() || !emailService.isConfigured()) {
+                return "Hóa đơn đã tạo nhưng chưa gửi được email cho khách hàng. Vui lòng kiểm tra lại cấu hình SMTP gửi mail.";
+            }
+
+            String baseUrl = buildBaseUrl(request);
+            String billCode = String.valueOf(billId);
+            String customerName = customer.getCustomer_name() != null ? customer.getCustomer_name() : "Quý khách";
+            String viewLink = baseUrl + "/BillController?action=viewPublicBill&bill_id=" + billId;
+            String downloadLink = baseUrl + "/BillController?action=downloadPublicBill&bill_id=" + billId;
+            BillDAO billDAO = new BillDAO();
+            BillDTO bill = billDAO.SearchByBillID(String.valueOf(billId));
+            java.util.Date invoiceIssuedAt = bill != null && bill.getBill_created_at() != null
+                    ? new java.util.Date(bill.getBill_created_at().getTime())
+                    : (bill != null ? bill.getBill_date() : null);
+            String invoiceIssuedAtText = invoiceIssuedAt != null
+                    ? new SimpleDateFormat("dd/MM/yyyy HH:mm").format(invoiceIssuedAt)
+                    : "-";
+            String paymentStatus = payment != null && payment.getStatus() != null ? payment.getStatus().toUpperCase() : "PENDING";
+            String paymentStatusLabel = "Chờ thanh toán";
+            if ("PAID".equals(paymentStatus)) {
+                paymentStatusLabel = "Đã thanh toán";
+            } else if ("EXPIRED".equals(paymentStatus)) {
+                paymentStatusLabel = "Hết hạn";
+            }
+
+            normalizeBillLineDisplayNames(quoteLines, bill != null ? bill.getWo_id() : 0);
+
+            StringBuilder linesHtml = new StringBuilder();
+            if (quoteLines != null && !quoteLines.isEmpty()) {
+                linesHtml.append("<table style='width:100%;border-collapse:collapse;margin-top:12px'>")
+                        .append("<thead><tr>")
+                        .append("<th style='text-align:left;border:1px solid #dbeafe;padding:8px'>Sản phẩm</th>")
+                        .append("<th style='text-align:right;border:1px solid #dbeafe;padding:8px'>SL</th>")
+                        .append("<th style='text-align:right;border:1px solid #dbeafe;padding:8px'>Đơn giá</th>")
+                        .append("<th style='text-align:right;border:1px solid #dbeafe;padding:8px'>Thành tiền</th>")
+                        .append("</tr></thead><tbody>");
+                for (BillLineDTO line : quoteLines) {
+                    linesHtml.append("<tr>")
+                            .append("<td style='border:1px solid #e5e7eb;padding:8px'>").append(escapeHtml(line.getItemType())).append("</td>")
+                            .append("<td style='border:1px solid #e5e7eb;padding:8px;text-align:right'>").append(line.getQuantity()).append("</td>")
+                            .append("<td style='border:1px solid #e5e7eb;padding:8px;text-align:right'>").append(String.format("%,.0f", line.getUnitPrice())).append(" VND</td>")
+                            .append("<td style='border:1px solid #e5e7eb;padding:8px;text-align:right'>").append(String.format("%,.0f", line.getLineTotal())).append(" VND</td>")
+                            .append("</tr>");
+                }
+                linesHtml.append("</tbody></table>");
+            }
+
+            StringBuilder body = new StringBuilder();
+            body.append("<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body style='font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;padding:20px'>")
+                    .append("<div style='max-width:760px;margin:0 auto;background:#fff;border:1px solid #dbeafe;border-radius:14px;overflow:hidden'>")
+                    .append("<div style='background:linear-gradient(120deg,#047857,#0ea5e9);padding:18px 22px;color:#fff'>")
+                    .append("<div style='font-size:12px;opacity:.9;letter-spacing:.1em'>PMS INVOICE</div>")
+                    .append("<h2 style='margin:6px 0 0'>Hóa đơn #").append(billCode).append("</h2>")
+                    .append("</div>")
+                    .append("<div style='padding:20px'>")
+                    .append("<p>Xin chào <strong>").append(escapeHtml(customerName)).append("</strong>, hóa đơn của bạn đã được tạo thành công.</p>")
+                    .append("<p><strong>Ngày lập:</strong> ").append(invoiceIssuedAtText).append("</p>")
+                    .append("<p><strong>Trạng thái:</strong> ").append(paymentStatusLabel).append("</p>")
+                    .append("<p><strong>Tổng tiền:</strong> ").append(String.format("%,.0f", totalAmount)).append(" VND</p>")
+                    .append(linesHtml)
+                    .append("<div style='margin-top:16px'>")
+                    .append("<a href='").append(viewLink).append("' style='display:inline-block;margin-right:8px;background:#0f766e;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none'>Xem hóa đơn</a>")
+                    .append("<a href='").append(downloadLink).append("' style='display:inline-block;margin-right:8px;background:#1d4ed8;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none'>Tải hóa đơn</a>")
+                    .append("</div>");
+
+            body.append("<p style='margin-top:18px;color:#64748b;font-size:12px'>Bạn có thể mở lại liên kết xem/tải hóa đơn bất kỳ lúc nào, kể cả sau khi thanh toán.</p>")
+                    .append("</div></div></body></html>");
+
+            boolean sent = emailService.sendEmail(
+                    customer.getEmail(),
+                    "[PMS] Hóa đơn #" + billCode + " - Thông tin thanh toán",
+                    body.toString()
+            );
+
+            if (!sent) {
+                String lastError = trimToNull(emailService.getLastError());
+                return "Hóa đơn đã tạo nhưng chưa gửi được email cho khách hàng. Vui lòng kiểm tra lại email khách hàng hoặc cấu hình SMTP."
+                        + (lastError != null ? " Chi tiết: " + lastError : "");
+            }
+            return null;
+        } catch (Exception e) {
+            String message = trimToNull(e.getMessage());
+            return "Hóa đơn đã tạo nhưng phát sinh lỗi khi gửi email cho khách hàng. Vui lòng kiểm tra lại email khách hàng hoặc cấu hình SMTP."
+                    + (message != null ? " Chi tiết: " + message : "");
+        }
+    }
+
+    private void viewBillDetail(HttpServletRequest request, HttpServletResponse response, boolean publicView)
+            throws ServletException, IOException {
+        int billId = parseIntOrDefault(request.getParameter("bill_id"), 0);
+        if (billId <= 0) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Thiếu bill_id hợp lệ");
+            return;
+        }
+
+        BillDAO billDAO = new BillDAO();
+        BillDTO bill = billDAO.SearchByBillID(String.valueOf(billId));
+        if (bill == null) {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND, "Không tìm thấy hóa đơn");
+            return;
+        }
+
+        CustomerDTO customer = null;
+        if (bill.getCustomer_id() > 0) {
+            customer = new CustomerDAO().SearchByCustomerID(String.valueOf(bill.getCustomer_id()));
+        }
+
+        PaymentDTO payment = new PaymentDAO().getLatestPaymentByBillId(billId);
+        List<BillLineDTO> lines = new BillLineDAO().getByBillId(billId);
+        normalizeBillLineDisplayNames(lines, bill.getWo_id());
+
+        request.setAttribute("detailBill", bill);
+        request.setAttribute("detailCustomer", customer);
+        request.setAttribute("detailPayment", payment);
+        request.setAttribute("detailLines", lines);
+        request.setAttribute("isPublicInvoiceView", publicView);
+        request.getRequestDispatcher("bill-detail.jsp").forward(request, response);
+    }
+
+    private void downloadBill(HttpServletRequest request, HttpServletResponse response, boolean publicDownload)
+            throws IOException {
+        int billId = parseIntOrDefault(request.getParameter("bill_id"), 0);
+        if (billId <= 0) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Thiếu bill_id hợp lệ");
+            return;
+        }
+
+        BillDAO billDAO = new BillDAO();
+        BillDTO bill = billDAO.SearchByBillID(String.valueOf(billId));
+        if (bill == null) {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND, "Không tìm thấy hóa đơn");
+            return;
+        }
+
+        CustomerDTO customer = bill.getCustomer_id() > 0
+                ? new CustomerDAO().SearchByCustomerID(String.valueOf(bill.getCustomer_id()))
+                : null;
+        PaymentDTO payment = new PaymentDAO().getLatestPaymentByBillId(billId);
+        List<BillLineDTO> lines = new BillLineDAO().getByBillId(billId);
+        normalizeBillLineDisplayNames(lines, bill.getWo_id());
+
+        DecimalFormat money = new DecimalFormat("#,###");
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+        String status = "Chờ thanh toán";
+        if (payment != null) {
+            if ("PAID".equalsIgnoreCase(payment.getStatus())) {
+                status = "Đã thanh toán";
+            } else if ("EXPIRED".equalsIgnoreCase(payment.getStatus())) {
+                status = "Hết hạn";
+            }
+        }
+
+        String companyName = "PMS MANUFACTURING";
+        String companyAddress = "123 Anywhere St., Any City";
+        String companyPhone = "1900 6868";
+        String companyEmail = "contact@pms.local";
+
+        String paymentCode = (payment != null && payment.getPaymentId() > 0)
+                ? String.format("PAY-%04d", payment.getPaymentId())
+                : "-";
+        String paidAt = (payment != null && payment.getPaidAt() != null)
+                ? sdf.format(payment.getPaidAt())
+                : "-";
+        String bankName = resolveBankName(payment != null ? payment.getBankBin() : null);
+        String bankAccount = payment != null && trimToNull(payment.getBankAccount()) != null ? payment.getBankAccount() : "-";
+        String bankAccountName = payment != null && trimToNull(payment.getBankAccountName()) != null ? payment.getBankAccountName() : "-";
+
+        byte[] pdfBytes = PdfInvoiceExporter.exportInvoice(
+                bill,
+                customer,
+                payment,
+                lines,
+                companyName,
+                companyAddress,
+                companyPhone,
+                companyEmail
+        );
+
+        response.setCharacterEncoding("UTF-8");
+        response.setContentType("application/pdf");
+        response.setHeader("Content-Disposition", "attachment; filename=hoa-don-" + billId + ".pdf");
+        response.setContentLength(pdfBytes.length);
+        response.getOutputStream().write(pdfBytes);
+        response.getOutputStream().flush();
+    }
+
+    private String buildBaseUrl(HttpServletRequest request) {
+        String scheme = request.getScheme();
+        String host = request.getServerName();
+        int port = request.getServerPort();
+        boolean defaultPort = ("http".equalsIgnoreCase(scheme) && port == 80)
+                || ("https".equalsIgnoreCase(scheme) && port == 443);
+        return scheme + "://" + host + (defaultPort ? "" : ":" + port) + request.getContextPath();
+    }
+
+    private int parseIntOrDefault(String raw, int defaultValue) {
+        try {
+            return Integer.parseInt(raw != null ? raw.trim() : "");
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    private double parseDoubleOrDefault(String raw, double defaultValue) {
+        try {
+            return Double.parseDouble(raw != null ? raw.trim() : "");
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) return null;
+        String s = value.trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    private void setBillPopup(HttpServletRequest request, String title, String message,
+            String actionUrl, String actionLabel, boolean reopenModal) {
+        request.setAttribute("billPopupTitle", title);
+        request.setAttribute("billPopupMessage", message);
+        request.setAttribute("billPopupActionUrl", actionUrl);
+        request.setAttribute("billPopupActionLabel", actionLabel);
+        request.setAttribute("billPopupReopenModal", reopenModal);
+    }
+
+    private String resolveBankName(String bankBin) {
+        String code = trimToNull(bankBin);
+        if (code == null) return "-";
+        switch (code) {
+            case "970403": return "Sacombank";
+            case "970405": return "Agribank";
+            case "970407": return "Techcombank";
+            case "970415": return "VietinBank";
+            case "970416": return "ACB";
+            case "970418": return "BIDV";
+            case "970422": return "MB Bank";
+            case "970423": return "TPBank";
+            case "970432": return "VPBank";
+            case "970436": return "Vietcombank";
+            case "970437": return "HDBank";
+            case "970441": return "VIB";
+            case "970443": return "SHB";
+            case "970448": return "OCB";
+            default: return "Ngân hàng khác";
+        }
+    }
+
+    private String escapeHtml(String value) {
+        if (value == null) return "";
+        return value.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "")
+                .replace("\n", "\\n");
     }
 
     /** Xử lý HTTP GET – xem danh sách, tìm kiếm hóa đơn */

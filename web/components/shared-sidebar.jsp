@@ -68,9 +68,13 @@
 
         <% if (canViewReports) { %>
         <p class="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4">Báo Cáo</p>
-        <a href="ProductionTrackingController" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= "tracking".equals(activePage) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
+        <a href="ProductionLogController" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= "productionlog".equals(activePage) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Nhật ký sản xuất
+        </a>
+        <a href="QcController?action=list" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= "qc".equals(activePage) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            Nhật ký sản lượng
+            Kiểm tra chất lượng
         </a>
         <% } %>
 
@@ -96,7 +100,6 @@
             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
             Quản lý hóa đơn
         </a>
-
         <p class="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4">Danh Mục</p>
         <a href="ItemController?action=list" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= "item".equals(activePage) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
@@ -130,6 +133,14 @@
             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
             Người dùng
         </a>
+        <a href="AdminController" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= "smtp".equals(activePage) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V8a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+            Cấu hình SMTP
+        </a>
+        <a href="PaymentController?action=list" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= ("payment".equals(activePage) || "payment-config".equals(activePage)) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm-5-5h.01M17 16h.01"/></svg>
+            Quản lý thanh toán
+        </a>
         <%-- Ẩn menu Doanh nghiệp và Quản lý file theo yêu cầu nghiệp vụ --%>
         <%--
         <a href="TenantController?action=list" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= "tenant".equals(activePage) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
@@ -157,11 +168,6 @@
                 </div>
                 <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
-            <% if (isAdmin) { %>
-            <a href="email-settings.jsp" class="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800/90 hover:text-white transition-all duration-200 shrink-0" title="Cài đặt">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-            </a>
-            <% } %>
         </div>
         <div id="sidebarUserMenu" class="hidden absolute bottom-full left-2 right-2 mb-1 py-1.5 bg-slate-800 rounded-xl border border-slate-700 shadow-xl z-50">
             <a href="profile.jsp" class="flex items-center gap-2 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-700 text-sm transition-all duration-200">Hồ Sơ Cá Nhân</a>

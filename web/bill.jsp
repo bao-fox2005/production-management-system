@@ -1,31 +1,60 @@
-<%@page contentType="text/html" pageEncoding="UTF-8" import="java.util.ArrayList, java.util.Map, java.util.HashMap, pms.model.BillDTO, pms.model.WorkOrderDTO, pms.model.CustomerDTO, pms.model.PaymentDTO, pms.model.UserDTO, java.text.DecimalFormat, java.text.SimpleDateFormat"%>
+<%@page contentType="text/html" pageEncoding="UTF-8" import="java.util.ArrayList, java.util.Map, java.util.HashMap, pms.model.BillDTO, pms.model.CustomerDTO, pms.model.ItemDTO, pms.model.PaymentDTO, pms.model.UserDTO, java.text.DecimalFormat, java.text.SimpleDateFormat, pms.utils.SystemConfigService"%>
 <%
     request.setCharacterEncoding("UTF-8");
     response.setCharacterEncoding("UTF-8");
     
     ArrayList<BillDTO> billList = (ArrayList<BillDTO>) request.getAttribute("billList");
-    ArrayList<WorkOrderDTO> workOrders = (ArrayList<WorkOrderDTO>) request.getAttribute("workOrders");
     ArrayList<CustomerDTO> customers = (ArrayList<CustomerDTO>) request.getAttribute("customers");
-    Map<Integer, WorkOrderDTO> workOrderMap = (Map<Integer, WorkOrderDTO>) request.getAttribute("workOrderMap");
+    ArrayList<ItemDTO> items = (ArrayList<ItemDTO>) request.getAttribute("items");
     Map<Integer, CustomerDTO> customerMap = (Map<Integer, CustomerDTO>) request.getAttribute("customerMap");
     Map<Integer, PaymentDTO> latestPaymentMap = (Map<Integer, PaymentDTO>) request.getAttribute("latestPaymentMap");
     UserDTO user = (UserDTO) session.getAttribute("user");
     
     String msg = request.getAttribute("msg") != null ? (String) request.getAttribute("msg") : request.getParameter("msg");
     String error = request.getAttribute("error") != null ? (String) request.getAttribute("error") : request.getParameter("error");
+    String billPopupTitle = request.getAttribute("billPopupTitle") != null ? (String) request.getAttribute("billPopupTitle") : "Thông báo";
+    String billPopupMessage = request.getAttribute("billPopupMessage") != null ? (String) request.getAttribute("billPopupMessage") : "";
+    String billPopupActionUrl = request.getAttribute("billPopupActionUrl") != null ? (String) request.getAttribute("billPopupActionUrl") : "";
+    String billPopupActionLabel = request.getAttribute("billPopupActionLabel") != null ? (String) request.getAttribute("billPopupActionLabel") : "";
+    boolean billPopupReopenModal = Boolean.TRUE.equals(request.getAttribute("billPopupReopenModal"));
     String filterStatus = request.getParameter("filter");
     String searchKeyword = request.getParameter("keyword");
     
     if (billList == null) billList = new ArrayList<>();
-    if (workOrders == null) workOrders = new ArrayList<>();
     if (customers == null) customers = new ArrayList<>();
-    if (workOrderMap == null) workOrderMap = new HashMap<>();
+    if (items == null) items = new ArrayList<>();
     if (customerMap == null) customerMap = new HashMap<>();
     if (latestPaymentMap == null) latestPaymentMap = new HashMap<>();
     if (filterStatus == null) filterStatus = "all";
     
     DecimalFormat df = new DecimalFormat("#,###");
     SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
+
+    StringBuilder itemTypeOptions = new StringBuilder();
+    itemTypeOptions.append("<option value=\"\" disabled selected hidden>-- Chọn sản phẩm --</option>");
+    for (ItemDTO item : items) {
+        if (item == null) continue;
+        String rawType = item.getItemType() != null ? item.getItemType().trim() : "";
+        String normalizedType = rawType.toLowerCase().replaceAll("\\s+", "");
+        boolean isProductType = "sanpham".equals(normalizedType)
+                || "sảnphẩm".equals(normalizedType)
+                || "product".equals(normalizedType);
+        if (!isProductType) continue;
+
+        String itemType = rawType.isEmpty() ? "SanPham" : rawType;
+        String itemName = item.getItemName() != null ? item.getItemName().trim() : "Item #" + item.getItemID();
+        String itemLabel = itemName + " (" + itemType + ")";
+        itemTypeOptions.append("<option value=\"")
+                .append(item.getItemID())
+                .append("\">")
+                .append(itemLabel.replace("<", "&lt;").replace(">", "&gt;"))
+                .append("</option>");
+    }
+    String quoteItemOptionsHtml = itemTypeOptions.toString()
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\r", "")
+            .replace("\n", "");
     
     String userName = user != null ? user.getUsername() : "User";
     String userRole = user != null ? user.getRole() : "user";
@@ -39,12 +68,65 @@
     request.setAttribute("activePage", activePage);
     request.setAttribute("pageTitle", pageTitle);
     
+    SystemConfigService configService = new SystemConfigService();
+    String receiverBankBin = configService.getBankBin();
+    String receiverBankAccount = configService.getBankAccount();
+    String receiverBankAccountName = configService.getBankAccountName();
+    if (receiverBankBin == null || receiverBankBin.trim().isEmpty()) receiverBankBin = "970406";
+    if (receiverBankAccount == null || receiverBankAccount.trim().isEmpty()) receiverBankAccount = "1234567890";
+    if (receiverBankAccountName == null || receiverBankAccountName.trim().isEmpty()) receiverBankAccountName = "CONG TY TNHH PMS";
+
+    String bankAccountsData = configService.getConfig("BANK_RECEIVER_ACCOUNTS", "");
+    String bankActiveAccountId = configService.getConfig("BANK_ACTIVE_ACCOUNT_ID", "");
+    if (bankAccountsData == null || bankAccountsData.trim().isEmpty()) {
+        bankAccountsData = "A1||" + receiverBankBin + "||" + receiverBankAccount + "||" + receiverBankAccountName;
+    }
+    if (bankActiveAccountId == null) {
+        bankActiveAccountId = "";
+    }
+
+    ArrayList<String[]> receiverAccountList = new ArrayList<>();
+    if (bankAccountsData != null && !bankAccountsData.trim().isEmpty()) {
+        String[] accountRows = bankAccountsData.split(";;");
+        for (String row : accountRows) {
+            if (row == null || row.trim().isEmpty()) continue;
+            String[] parts = row.split("\\|\\|", -1);
+            if (parts.length < 4) continue;
+            String id = parts[0] != null ? parts[0].trim() : "";
+            String bin = parts[1] != null ? parts[1].trim() : "";
+            String account = parts[2] != null ? parts[2].trim() : "";
+            String name = parts[3] != null ? parts[3].trim() : "";
+            if (id.isEmpty() || bin.isEmpty() || account.isEmpty() || name.isEmpty()) continue;
+            receiverAccountList.add(new String[]{id, bin, account, name});
+        }
+    }
+    if (receiverAccountList.isEmpty()) {
+        receiverAccountList.add(new String[]{"A1", receiverBankBin, receiverBankAccount, receiverBankAccountName});
+    }
+
+    boolean hasActiveReceiver = false;
+    for (String[] acc : receiverAccountList) {
+        if (acc[0].equals(bankActiveAccountId)) {
+            hasActiveReceiver = true;
+            break;
+        }
+    }
+    if (!hasActiveReceiver) {
+        bankActiveAccountId = receiverAccountList.get(0)[0];
+    }
+
+    String bankAccountsDataJs = bankAccountsData.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
+    String bankActiveAccountIdJs = bankActiveAccountId.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
+    String billPopupTitleJs = billPopupTitle.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
+    String billPopupMessageJs = billPopupMessage.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
+    String billPopupActionUrlJs = billPopupActionUrl.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
+    String billPopupActionLabelJs = billPopupActionLabel.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "\\n");
+
     double totalAmount = 0;
     int countPaid = 0;
     int countPending = 0;
     
     for (BillDTO b : billList) {
-        if (b.getTotal_amount() > 0) totalAmount += b.getTotal_amount();
         PaymentDTO latestPayment = latestPaymentMap.get(b.getBill_id());
         boolean paymentExpired = latestPayment != null
                 && latestPayment.getExpiresAt() != null
@@ -52,6 +134,9 @@
                 && latestPayment.getExpiresAt().before(new java.util.Date());
         if (latestPayment != null && "PAID".equalsIgnoreCase(latestPayment.getStatus())) {
             countPaid++;
+            if (b.getTotal_amount() > 0) {
+                totalAmount += b.getTotal_amount();
+            }
         } else if (latestPayment == null || "PENDING".equalsIgnoreCase(latestPayment.getStatus()) || paymentExpired || "EXPIRED".equalsIgnoreCase(latestPayment.getStatus())) {
             countPending++;
         }
@@ -131,6 +216,33 @@
                             </svg>
                             Tạo hóa đơn mới
                         </button>
+                    </div>
+                </div>
+
+                <!-- Receiver Info (Compact) -->
+                <div class="mb-6 rounded-2xl border border-teal-200 bg-white/95 p-4 shadow-sm dark:border-teal-500/20 dark:bg-slate-800/70">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-teal-600 dark:text-teal-300">Thông tin nhận tiền</p>
+                            <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                                <span class="font-semibold text-slate-800 dark:text-slate-100"><%= receiverBankAccountName %></span>
+                                · STK <span class="font-semibold text-slate-800 dark:text-slate-100"><%= receiverBankAccount %></span>
+                            </p>
+                        </div>
+                        <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+                            <form action="PaymentController" method="post" class="w-full sm:w-auto">
+                                <input type="hidden" name="action" value="switchActiveAccountQuick" />
+                                <input type="hidden" name="redirect" value="MainController?action=listBill" />
+                                <select name="active_account_id" onchange="this.form.submit()" class="min-w-[230px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:focus:ring-teal-500/30">
+                                    <% for (String[] acc : receiverAccountList) { %>
+                                    <option value="<%= acc[0] %>" <%= acc[0].equals(bankActiveAccountId) ? "selected" : "" %>><%= acc[3] %> · <%= acc[2] %></option>
+                                    <% } %>
+                                </select>
+                            </form>
+                            <a href="PaymentController?action=list" class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-700/70 dark:text-slate-200 dark:hover:bg-slate-700">
+                                Xem chi tiết thanh toán
+                            </a>
+                        </div>
                     </div>
                 </div>
 
@@ -222,7 +334,7 @@
                             <input type="hidden" name="action" value="listBill"/>
                             <input type="hidden" name="filter" value="<%= filterStatus %>"/>
                             <input type="text" name="keyword" value="<%= searchKeyword != null ? searchKeyword : "" %>"
-                                   placeholder="Tìm theo mã hóa đơn hoặc khách hàng..."
+                                   placeholder="Tìm mã hóa đơn hoặc khách hàng..."
                                    class="min-w-[260px] rounded-2xl border border-slate-200 px-4 py-2.5 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
                             <button type="submit" class="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600">
                                 Tìm kiếm
@@ -238,7 +350,6 @@
                             <thead>
                                 <tr class="border-b border-slate-100 bg-slate-50 dark:bg-slate-700/50 dark:border-slate-700">
                                     <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Mã HD</th>
-                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">WO</th>
                                     <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Khách hàng</th>
                                     <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Tổng tiền</th>
                                     <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Thanh toán</th>
@@ -249,7 +360,7 @@
                             <tbody>
                                 <% if (billList.isEmpty()) { %>
                                 <tr>
-                                    <td colspan="7" class="px-6 py-16 text-center text-slate-400">
+                                    <td colspan="6" class="px-6 py-16 text-center text-slate-400">
                                         <div class="mx-auto flex max-w-md flex-col items-center gap-3">
                                             <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-700/60 dark:text-slate-500">
                                                 <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -271,17 +382,23 @@
                                 </tr>
                                 <% } else {
                                     for (BillDTO b : billList) {
-                                        WorkOrderDTO workOrder = workOrderMap.get(b.getWo_id());
                                         CustomerDTO customer = customerMap.get(b.getCustomer_id());
                                         PaymentDTO payment = latestPaymentMap.get(b.getBill_id());
                                         boolean paymentExpired = payment != null
                                                 && payment.getExpiresAt() != null
                                                 && !"PAID".equalsIgnoreCase(payment.getStatus())
                                                 && payment.getExpiresAt().before(new java.util.Date());
-                                        String statusClass = "pending".equalsIgnoreCase(b.getStatus()) ? "status-pending" :
-                                                            "paid".equalsIgnoreCase(b.getStatus()) ? "status-paid" : "status-cancelled";
+                                        String statusClass = payment != null && "PAID".equalsIgnoreCase(payment.getStatus())
+                                                ? "status-paid"
+                                                : paymentExpired || (payment != null && "EXPIRED".equalsIgnoreCase(payment.getStatus()))
+                                                        ? "status-cancelled"
+                                                        : payment != null
+                                                                ? "status-pending"
+                                                                : ("pending".equalsIgnoreCase(b.getStatus()) ? "status-pending"
+                                                                : "paid".equalsIgnoreCase(b.getStatus()) ? "status-paid" : "status-cancelled");
                                         String statusLabel = payment != null && "PAID".equalsIgnoreCase(payment.getStatus()) ? "Đã thanh toán"
-                                                            : paymentExpired ? "Hết hạn QR"
+                                                            : paymentExpired || (payment != null && "EXPIRED".equalsIgnoreCase(payment.getStatus())) ? "Hết hạn QR"
+                                                            : payment != null ? "Chờ thanh toán"
                                                             : "pending".equalsIgnoreCase(b.getStatus()) ? "Chờ thanh toán"
                                                             : "paid".equalsIgnoreCase(b.getStatus()) ? "Đã thanh toán" : "Đã hủy";
                                         String paymentClass = payment == null ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
@@ -296,6 +413,7 @@
                                                 : "Đã hết hạn";
                                         String customerName = customer != null ? customer.getCustomer_name() : (b.getCustomer_id() > 0 ? "KH-" + b.getCustomer_id() : "Khách lẻ");
                                         String customerEmail = customer != null && customer.getEmail() != null ? customer.getEmail() : "";
+                                        boolean isPaidPayment = payment != null && "PAID".equalsIgnoreCase(payment.getStatus());
                                         String qrDataValue = payment != null && payment.getQrCodeData() != null ? payment.getQrCodeData() : "";
                                         String qrImageBase64Value = qrDataValue;
                                         if (qrDataValue.contains("|QR_URL|")) {
@@ -311,10 +429,6 @@
                                 <tr id="bill-row-<%= b.getBill_id() %>" class="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors dark:border-slate-700 dark:hover:bg-slate-700/50">
                                     <td class="px-4 py-3 align-top text-sm font-semibold text-slate-700 dark:text-slate-300">#<%= b.getBill_id() %></td>
                                     <td class="px-4 py-3 align-top text-sm text-slate-600 dark:text-slate-400">
-                                        <div class="font-semibold text-teal-600 dark:text-teal-400">WO-<%= b.getWo_id() %></div>
-                                        <div class="mt-1 text-xs text-slate-400 dark:text-slate-500"><%= workOrder != null && workOrder.getProductName() != null ? workOrder.getProductName() : "Lệnh sản xuất" %></div>
-                                    </td>
-                                    <td class="px-4 py-3 align-top text-sm text-slate-600 dark:text-slate-400">
                                         <div class="font-medium text-slate-700 dark:text-slate-200"><%= customerName %></div>
                                         <div class="mt-1 text-xs text-slate-400 dark:text-slate-500"><%= customerEmail != null && !customerEmail.isEmpty() ? customerEmail : "Chưa có email" %></div>
                                     </td>
@@ -322,53 +436,19 @@
                                     <td class="px-4 py-3 align-top">
                                         <div class="flex flex-col gap-2">
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <% if (payment != null && "PAID".equalsIgnoreCase(payment.getStatus())) { %>
-                                                <span id="payment-status-<%= b.getBill_id() %>" class="inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-bold <%= paymentClass %>"><%= paymentLabel %></span>
-                                                <span id="bill-status-<%= b.getBill_id() %>" class="hidden inline-flex w-fit items-center px-2.5 py-1 rounded-full text-xs font-bold <%= statusClass %>">
-                                                    <%= statusLabel %>
-                                                </span>
-                                                <% } else { %>
                                                 <span id="bill-status-<%= b.getBill_id() %>" class="inline-flex w-fit items-center px-2.5 py-1 rounded-full text-xs font-bold <%= statusClass %>">
                                                     <%= statusLabel %>
                                                 </span>
-                                                <span id="payment-status-<%= b.getBill_id() %>" class="inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-bold <%= paymentClass %>"><%= paymentLabel %></span>
-                                                <% } %>
                                             </div>
-                                            <span class="text-xs text-slate-400 dark:text-slate-500">WO liên kết: <%= b.getWo_id() %></span>
                                         </div>
                                     </td>
                                     <td class="px-4 py-3 align-top text-sm text-slate-500 dark:text-slate-400">
                                         <%= b.getBill_date() != null ? sdf.format(b.getBill_date()) : "-" %>
                                     </td>
                                     <td class="px-4 py-3 align-top text-center">
-                                        <div class="flex flex-wrap items-center justify-center gap-2">
-                                            <% if (payment != null) { %>
-                                            <button type="button"
-                                                    id="view-qr-btn-<%= b.getBill_id() %>"
-                                                    data-mode="view"
-                                                    data-bill-id="<%= b.getBill_id() %>"
-                                                    data-amount="<%= payment != null ? payment.getAmount() : b.getTotal_amount() %>"
-                                                    data-customer-name="<%= customerName %>"
-                                                    data-customer-email="<%= customerEmail %>"
-                                                    data-payment-id="<%= payment.getPaymentId() %>"
-                                                    data-bank-bin="<%= bankBinAttr %>"
-                                                    data-bank-account="<%= bankAccountAttr %>"
-                                                    data-bank-account-name="<%= bankAccountNameAttr %>"
-                                                    data-expires-at="<%= expiresAtAttr %>"
-                                                    data-paid-at="<%= payment.getPaidAt() != null ? payment.getPaidAt().toString() : "" %>"
-                                                    data-payment-status="<%= payment.getStatus() %>"
-                                                    data-qr-image-base64="<%= qrImageBase64Attr %>"
-                                                    onclick="openQrModal(this)"
-                                                    class="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white transition-colors hover:bg-blue-700 shadow-sm shadow-blue-500/30"
-                                                    title="Xem QR"
-                                                    aria-label="Xem QR">
-                                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h3v3H7V7zm7 0h3v3h-3V7zM7 14h3v3H7v-3zm7 0h3m-3 3h3m-3-6h3m-10 3h3m1 4H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v5"/>
-                                                </svg>
-                                            </button>
-                                            <% } %>
-                                            <% if (payment != null && "PENDING".equalsIgnoreCase(payment.getStatus()) && !paymentExpired) { %>
-                                            <form action="PaymentController" method="post" style="display:inline;" class="js-confirm-payment-form" data-bill-id="<%= b.getBill_id() %>" data-payment-id="<%= payment.getPaymentId() %>" onsubmit="return confirmPaymentInline(this)">
+                                        <div class="inline-grid grid-cols-3 gap-1.5">
+                                            <% if (payment != null && !"PAID".equalsIgnoreCase(payment.getStatus())) { %>
+                                            <form action="PaymentController" method="post" style="display:inline;" class="js-confirm-payment-form justify-self-center" data-bill-id="<%= b.getBill_id() %>" data-payment-id="<%= payment.getPaymentId() %>" onsubmit="confirmPaymentInline(event, this); return false;">
                                                 <input type="hidden" name="action" value="confirmPayment"/>
                                                 <input type="hidden" name="payment_id" value="<%= payment.getPaymentId() %>"/>
                                                 <input type="hidden" name="source" value="bill"/>
@@ -383,30 +463,33 @@
                                                     </svg>
                                                 </button>
                                             </form>
+                                            <% } else { %>
+                                            <span class="h-10 w-10 rounded-2xl opacity-0 pointer-events-none select-none" aria-hidden="true"></span>
                                             <% } %>
-                                            <% if (payment == null || !"PAID".equalsIgnoreCase(payment.getStatus())) { %>
                                             <button type="button"
-                                                    id="create-qr-btn-<%= b.getBill_id() %>"
-                                                    data-mode="<%= payment == null ? "create" : "recreate" %>"
+                                                    id="view-qr-btn-<%= b.getBill_id() %>"
+                                                    data-mode="invoice"
                                                     data-bill-id="<%= b.getBill_id() %>"
-                                                    data-amount="<%= b.getTotal_amount() %>"
+                                                    data-amount="<%= payment != null ? payment.getAmount() : b.getTotal_amount() %>"
                                                     data-customer-name="<%= customerName %>"
                                                     data-customer-email="<%= customerEmail %>"
-                                                    onclick="openQrModal(this)"
-                                                    class="inline-flex h-10 w-10 items-center justify-center rounded-2xl <%= payment == null ? "bg-teal-600 hover:bg-teal-700 shadow-teal-500/30" : "bg-orange-500 hover:bg-orange-600 shadow-orange-500/30" %> text-white transition-colors shadow-sm"
-                                                    title="<%= payment == null ? "Tạo QR" : "Tạo lại QR" %>"
-                                                    aria-label="<%= payment == null ? "Tạo QR" : "Tạo lại QR" %>">
-                                                <% if (payment == null) { %>
+                                                    data-payment-id="<%= payment != null ? payment.getPaymentId() : "" %>"
+                                                    data-bank-bin="<%= bankBinAttr %>"
+                                                    data-bank-account="<%= bankAccountAttr %>"
+                                                    data-bank-account-name="<%= bankAccountNameAttr %>"
+                                                    data-expires-at="<%= expiresAtAttr %>"
+                                                    data-paid-at="<%= payment != null && payment.getPaidAt() != null ? payment.getPaidAt().toString() : "" %>"
+                                                    data-payment-status="<%= payment != null ? payment.getStatus() : "" %>"
+                                                    data-qr-image-base64="<%= (!paymentExpired && payment != null) ? qrImageBase64Attr : "" %>"
+                                                    onclick="openPaymentDetail(this)"
+                                                    class="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-600 text-white transition-colors hover:bg-indigo-700 shadow-sm shadow-indigo-500/30"
+                                                    title="Xem hóa đơn"
+                                                    aria-label="Xem hóa đơn">
                                                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                                 </svg>
-                                                <% } else { %>
-                                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12a8 8 0 0113.66-5.66L20 8M20 4v4h-4M20 12a8 8 0 01-13.66 5.66L4 16M4 20v-4h4"/>
-                                                </svg>
-                                                <% } %>
                                             </button>
-                                            <% } %>
                                             <button type="button"
                                                     data-bill-id="<%= b.getBill_id() %>"
                                                     data-bill-name="Hóa đơn #<%= b.getBill_id() %>"
@@ -433,11 +516,10 @@
 
     <!-- Add Bill Modal -->
     <div id="addModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-        <div class="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+        <div class="w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
             <div class="flex items-center justify-between border-b border-slate-100 p-6 dark:border-slate-800">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Tạo hóa đơn mới</h3>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Lập nhanh hóa đơn từ lệnh sản xuất và gắn khách hàng tương ứng.</p>
                 </div>
                 <button onclick="closeAddModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -449,32 +531,35 @@
                 <input type="hidden" name="action" value="addBill"/>
                 
                 <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-2 dark:text-slate-300">Lệnh Sản Xuất (WO)</label>
-                    <select id="billWoSelect" name="wo_id" required class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
-                        <option value="">-- Chọn lệnh sản xuất --</option>
-                        <% for (WorkOrderDTO wo : workOrders) { %>
-                        <option value="<%= wo.getWo_id() %>" data-customer-id="<%= wo.getCustomerId() %>">WO-<%= wo.getWo_id() %> | <%= wo.getProductName() != null ? wo.getProductName() : "SP#" + wo.getProduct_item_id() %></option>
-                        <% } %>
-                    </select>
-                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Chọn lệnh sản xuất để liên kết hóa đơn với đơn hàng tương ứng.</p>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-2 dark:text-slate-300">Khách Hàng</label>
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300">Khách Hàng</label>
+                        <button type="button" onclick="openQuickCustomerModal()" class="inline-flex items-center gap-1 rounded-xl border border-cyan-500 px-3 py-1.5 text-xs font-semibold text-cyan-600 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-900/20">
+                            + Thêm khách hàng
+                        </button>
+                    </div>
                     <select id="billCustomerSelect" name="customer_id" required class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
-                        <option value="">-- Chọn khách hàng --</option>
+                        <option value="" disabled selected hidden>-- Chọn khách hàng có sẵn --</option>
                         <% for (CustomerDTO c : customers) { %>
                         <option value="<%= c.getCustomer_id() %>"><%= c.getCustomer_name() %></option>
                         <% } %>
                     </select>
-                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Nếu WO không tự điền khách hàng, hệ thống sẽ giữ sẵn khách hàng đầu tiên để bạn có thể tạo hóa đơn ngay.</p>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                    <div class="mb-3 flex items-center justify-between">
+                        <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300">Chi tiết báo giá</label>
+                        <button type="button" id="addQuoteLineBtn" class="inline-flex items-center gap-1 rounded-xl border border-teal-500 px-3 py-1.5 text-xs font-semibold text-teal-600 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-900/20">
+                            + Thêm dòng
+                        </button>
+                    </div>
+                    <div id="quoteLinesContainer" class="space-y-2"></div>
                 </div>
                 
                 <div>
                     <label class="block text-sm font-semibold text-slate-700 mb-2 dark:text-slate-300">Tổng Tiền (VND)</label>
-                    <input id="billTotalAmount" type="number" name="total_amount" required min="1000" step="1000" placeholder="VD: 5000000"
-                           class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
-                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Nhập số tiền lớn hơn 0 để có thể tạo hóa đơn.</p>
+                    <input id="billTotalAmount" type="number" name="total_amount" required min="0.01" step="0.01" placeholder="Hệ thống tự tính"
+                           readonly
+                           class="w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700 focus:border-slate-200 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
                 </div>
                 
                 <div class="flex gap-3 pt-4">
@@ -484,6 +569,46 @@
                     <button type="button" onclick="closeAddModal()" class="px-6 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
                         Hủy
                     </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="quickCustomerModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div class="w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div class="flex items-center justify-between border-b border-slate-100 p-6 dark:border-slate-800">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Thêm khách hàng nhanh</h3>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Tạo mới khách hàng ngay trong luồng tạo hóa đơn.</p>
+                </div>
+                <button type="button" onclick="closeQuickCustomerModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <form id="quickCustomerForm" class="p-6 space-y-4">
+                <div>
+                    <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Tên khách hàng <span class="text-red-500">*</span></label>
+                    <input type="text" name="customer_name" required maxlength="100" placeholder="VD: Nguyễn Văn A"
+                           class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Số điện thoại <span class="text-red-500">*</span></label>
+                        <input type="text" name="phone" required maxlength="15" placeholder="VD: 0901234567"
+                               class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+                    </div>
+                    <div>
+                        <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Email <span class="text-red-500">*</span></label>
+                        <input type="email" name="email" required maxlength="50" placeholder="VD: khachhang@email.com"
+                               class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+                    </div>
+                </div>
+                <div id="quickCustomerStatus" class="hidden rounded-xl border px-3 py-2 text-sm"></div>
+                <div class="flex gap-3 pt-2">
+                    <button type="submit" class="flex-1 rounded-xl bg-cyan-600 py-3 font-semibold text-white hover:bg-cyan-700">Lưu khách hàng</button>
+                    <button type="button" onclick="closeQuickCustomerModal()" class="px-6 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">Đóng</button>
                 </div>
             </form>
         </div>
@@ -529,6 +654,7 @@
                 <input type="hidden" name="action" value="createQr"/>
                 <input type="hidden" name="source" value="bill"/>
                 <input type="hidden" name="ajax" value="1"/>
+                <input id="qrPaymentId" type="hidden" name="payment_id" value=""/>
                 <div id="qrFormFields" class="grid gap-5 md:grid-cols-2">
                     <div>
                         <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Mã hóa đơn *</label>
@@ -543,10 +669,19 @@
                         <select name="expire_minutes" class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
                             <option value="5">5 phút</option>
                             <option value="10">10 phút</option>
-                            <option value="15" selected>15 phút</option>
+                            <option value="15">15 phút</option>
                             <option value="30">30 phút</option>
                             <option value="60">60 phút</option>
+                            <option value="1440" selected>24 giờ</option>
                         </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Tài khoản nhận tiền *</label>
+                        <select id="qrReceiverAccount" class="w-full rounded-2xl border border-slate-200 px-4 py-3 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white"></select>
+                        <p id="qrReceiverAccountMeta" class="mt-2 text-xs text-slate-500 dark:text-slate-400">--</p>
+                        <input id="qrBankBin" type="hidden" name="bank_bin"/>
+                        <input id="qrBankAccount" type="hidden" name="bank_account"/>
+                        <input id="qrBankAccountName" type="hidden" name="bank_account_name"/>
                     </div>
                     <div>
                         <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Tên khách hàng</label>
@@ -580,6 +715,31 @@
                             <div id="qrCountdown" class="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">--</div>
                         </div>
                     </div>
+                    <div id="qrInvoiceActions" class="hidden border-t border-slate-200 pt-4 dark:border-slate-700">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                            <button id="qrRecreateButton" type="button" class="hidden inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-orange-500/30 transition-colors hover:bg-orange-600">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12a8 8 0 0113.66-5.66L20 8M20 4v4h-4M20 12a8 8 0 01-13.66 5.66L4 16M4 20v-4h4"/>
+                                </svg>
+                                Tạo lại mã QR
+                            </button>
+                            <a id="qrViewInvoiceLink" href="#" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                                Xem hóa đơn
+                            </a>
+                            <a id="qrDownloadInvoiceLink" href="#" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-cyan-500/30 transition-colors hover:bg-cyan-700">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 10l5 5 5-5"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15V3"/>
+                                </svg>
+                                Tải hóa đơn
+                            </a>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 dark:border-slate-800 sm:flex-row sm:justify-end">
                     <button type="button" onclick="closeQrModal()" class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 py-2.5 font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">Đóng</button>
@@ -593,13 +753,45 @@
             </form>
         </div>
     </div>
+
+    <div id="invoiceModal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+        <div class="flex h-[92vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Xem hóa đơn</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a id="invoiceModalDownload" href="#" target="_blank" rel="noopener" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700" title="Tải hóa đơn" aria-label="Tải hóa đơn">
+                        Tải hóa đơn
+                    </a>
+                    <a id="invoiceModalDownloadPdf" href="#" target="_blank" rel="noopener" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+                        Tải PDF
+                    </a>
+                    <button id="invoiceModalPrint" type="button" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+                        In hóa đơn
+                    </button>
+                    <button type="button" onclick="closeInvoiceModal()" class="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 bg-slate-100 dark:bg-slate-800">
+                <iframe id="invoiceModalFrame" src="about:blank" class="h-full w-full border-0" title="Invoice Preview"></iframe>
+            </div>
+        </div>
+    </div>
  
     <script>
-        const billWoSelect = document.getElementById('billWoSelect');
+        const quoteItemOptionsHtml = '<%= quoteItemOptionsHtml %>';
         const billCustomerSelect = document.getElementById('billCustomerSelect');
         const billTotalAmount = document.getElementById('billTotalAmount');
         const addBillForm = document.querySelector('#addModal form');
         const addModal = document.getElementById('addModal');
+        const quickCustomerModal = document.getElementById('quickCustomerModal');
+        const quickCustomerForm = document.getElementById('quickCustomerForm');
+        const quickCustomerStatus = document.getElementById('quickCustomerStatus');
         const deleteBillModal = document.getElementById('deleteBillModal');
         const qrModal = document.getElementById('qrModal');
         const qrCreateForm = document.getElementById('qrCreateForm');
@@ -616,23 +808,283 @@
         const qrResultExpiresAt = document.getElementById('qrResultExpiresAt');
         const qrCountdown = document.getElementById('qrCountdown');
         const qrTimeLabel = document.getElementById('qrTimeLabel');
+        const qrReceiverAccount = document.getElementById('qrReceiverAccount');
+        const qrReceiverAccountMeta = document.getElementById('qrReceiverAccountMeta');
+        const qrBankBinInput = document.getElementById('qrBankBin');
+        const qrBankAccountInput = document.getElementById('qrBankAccount');
+        const qrBankAccountNameInput = document.getElementById('qrBankAccountName');
+        const receiverAccountsRaw = '<%= bankAccountsDataJs %>';
+        const receiverActiveIdRaw = '<%= bankActiveAccountIdJs %>';
+        const receiverAccounts = [];
+        const qrInvoiceActions = document.getElementById('qrInvoiceActions');
+        const qrViewInvoiceLink = document.getElementById('qrViewInvoiceLink');
+        const qrDownloadInvoiceLink = document.getElementById('qrDownloadInvoiceLink');
+        const qrRecreateButton = document.getElementById('qrRecreateButton');
+        const invoiceModal = document.getElementById('invoiceModal');
+        const invoiceModalFrame = document.getElementById('invoiceModalFrame');
+        const invoiceModalDownload = document.getElementById('invoiceModalDownload');
+        const invoiceModalDownloadPdf = document.getElementById('invoiceModalDownloadPdf');
+        const invoiceModalPrint = document.getElementById('invoiceModalPrint');
         let qrCountdownTimer = null;
+        let errorPopupTimer = null;
 
-        function ensureBillCustomerSelected() {
-            if (!billCustomerSelect) return;
-            if (!billCustomerSelect.value && billCustomerSelect.options.length > 1) {
-                billCustomerSelect.selectedIndex = 1;
+        function parseReceiverAccounts(serialized) {
+            if (!serialized || !serialized.trim()) return [];
+            return serialized.split(';;').map(function (row) {
+                const p = row.split('||');
+                return p.length >= 4 ? { id: p[0], bin: p[1], account: p[2], name: p[3] } : null;
+            }).filter(Boolean);
+        }
+
+        function findReceiverAccount(id) {
+            return receiverAccounts.find(function (a) { return a.id === id; }) || null;
+        }
+
+        function syncQrReceiverAccountFields() {
+            if (!qrReceiverAccount) return;
+            const picked = findReceiverAccount(qrReceiverAccount.value) || receiverAccounts[0] || null;
+            if (!picked) return;
+            if (qrBankBinInput) qrBankBinInput.value = picked.bin || '';
+            if (qrBankAccountInput) qrBankAccountInput.value = picked.account || '';
+            if (qrBankAccountNameInput) qrBankAccountNameInput.value = picked.name || '';
+            if (qrReceiverAccountMeta) {
+                qrReceiverAccountMeta.textContent = 'STK: ' + (picked.account || '-') + ' · Chủ TK: ' + (picked.name || '-');
             }
         }
 
-        function syncBillCustomerFromWo() {
-            if (!billWoSelect || !billCustomerSelect) return;
-            const selectedOption = billWoSelect.options[billWoSelect.selectedIndex];
-            const customerId = selectedOption ? selectedOption.getAttribute('data-customer-id') : '';
-            if (customerId && customerId !== '0') {
-                billCustomerSelect.value = customerId;
-            } else {
-                ensureBillCustomerSelected();
+        function initReceiverAccounts() {
+            const parsed = parseReceiverAccounts(receiverAccountsRaw);
+            parsed.forEach(function (a) { receiverAccounts.push(a); });
+            if (!receiverAccounts.length) {
+                receiverAccounts.push({
+                    id: 'A1',
+                    bin: '<%= receiverBankBin %>',
+                    account: '<%= receiverBankAccount %>',
+                    name: '<%= receiverBankAccountName %>'
+                });
+            }
+
+            if (!qrReceiverAccount) return;
+            qrReceiverAccount.innerHTML = receiverAccounts.map(function (a) {
+                return '<option value="' + a.id + '">' + (a.name || 'Tài khoản nhận tiền') + '</option>';
+            }).join('');
+
+            const active = findReceiverAccount(receiverActiveIdRaw) || receiverAccounts[0];
+            qrReceiverAccount.value = active.id;
+            syncQrReceiverAccountFields();
+            qrReceiverAccount.addEventListener('change', syncQrReceiverAccountFields);
+        }
+
+        function createQuoteLineRow() {
+            const row = document.createElement('div');
+            row.className = 'quote-line grid gap-2 md:grid-cols-12';
+            row.innerHTML = ''
+                + '<select name="line_item_type" required class="md:col-span-4 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white">'
+                + quoteItemOptionsHtml
+                + '</select>'
+                + '<input type="number" name="line_quantity" required min="1" step="1" placeholder="SL" class="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />'
+                + '<input type="number" name="line_unit_price" required min="0.01" step="0.01" placeholder="Đơn giá" class="md:col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />'
+                + '<div class="md:col-span-4 flex items-center gap-2">'
+                + '  <input type="text" name="line_total_view" readonly placeholder="Thành tiền" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300" />'
+                + '  <button type="button" class="remove-quote-line inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white hover:bg-rose-700" title="Xóa dòng">×</button>'
+                + '</div>';
+            return row;
+        }
+
+        function recalcLineRow(row) {
+            if (!row) return 0;
+            const qtyInput = row.querySelector('input[name="line_quantity"]');
+            const priceInput = row.querySelector('input[name="line_unit_price"]');
+            const totalViewInput = row.querySelector('input[name="line_total_view"]');
+            const qty = Number(qtyInput ? qtyInput.value : 0);
+            const unit = Number(priceInput ? priceInput.value : 0);
+            const lineTotal = qty > 0 && unit > 0 ? qty * unit : 0;
+            if (totalViewInput) {
+                totalViewInput.value = lineTotal > 0
+                    ? new Intl.NumberFormat('vi-VN').format(lineTotal)
+                    : '';
+            }
+            return lineTotal;
+        }
+
+        function recalcBillTotalFromLines() {
+            const rows = document.querySelectorAll('#quoteLinesContainer .quote-line');
+            let sum = 0;
+            rows.forEach(function(row) {
+                sum += recalcLineRow(row);
+            });
+            if (billTotalAmount) {
+                billTotalAmount.value = sum > 0 ? String(Math.round(sum)) : '';
+            }
+        }
+
+        function addQuoteLine() {
+            const container = document.getElementById('quoteLinesContainer');
+            if (!container) return;
+            const row = createQuoteLineRow();
+            container.appendChild(row);
+
+            const qtyInput = row.querySelector('input[name="line_quantity"]');
+            const unitInput = row.querySelector('input[name="line_unit_price"]');
+            const removeBtn = row.querySelector('.remove-quote-line');
+            if (qtyInput) qtyInput.addEventListener('input', recalcBillTotalFromLines);
+            if (unitInput) unitInput.addEventListener('input', recalcBillTotalFromLines);
+            if (removeBtn) {
+                removeBtn.addEventListener('click', function() {
+                    row.remove();
+                    recalcBillTotalFromLines();
+                });
+            }
+        }
+
+        function resetQuoteLines() {
+            const container = document.getElementById('quoteLinesContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            addQuoteLine();
+        }
+
+        function ensureBillCustomerSelected() {
+            if (!billCustomerSelect) return;
+            billCustomerSelect.selectedIndex = 0;
+        }
+
+        function ensureErrorPopup() {
+            let popup = document.getElementById('billErrorPopup');
+            if (popup) return popup;
+
+            popup = document.createElement('div');
+            popup.id = 'billErrorPopup';
+            popup.className = 'pointer-events-none fixed inset-x-0 top-6 z-[120] mx-auto hidden w-full max-w-lg px-4';
+            popup.innerHTML = ''
+                + '<div class="pointer-events-auto rounded-2xl border border-rose-200 bg-white/95 p-4 shadow-2xl backdrop-blur dark:border-rose-900/60 dark:bg-slate-900/95">'
+                + '  <div class="flex items-start gap-3">'
+                + '    <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300">!<\/div>'
+                + '    <div class="min-w-0 flex-1">'
+                + '      <div id="billErrorPopupTitle" class="text-sm font-bold text-rose-700 dark:text-rose-300">Lỗi dữ liệu<\/div>'
+                + '      <div id="billErrorPopupMessage" class="mt-1 text-sm leading-5 text-slate-700 dark:text-slate-200"><\/div>'
+                + '      <div id="billErrorPopupActions" class="mt-4 hidden flex flex-wrap gap-2">'
+                + '        <a id="billErrorPopupActionLink" href="#" class="inline-flex items-center rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700">Xem cấu hình<\/a>'
+                + '        <button type="button" id="billErrorPopupCloseBtn" class="inline-flex items-center rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">Đóng<\/button>'
+                + '      <\/div>'
+                + '    <\/div>'
+                + '  <\/div>'
+                + '<\/div>';
+            document.body.appendChild(popup);
+
+            const closeBtn = document.getElementById('billErrorPopupCloseBtn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    popup.classList.add('hidden');
+                });
+            }
+            return popup;
+        }
+
+        function showErrorPopup(message, options) {
+            const popup = ensureErrorPopup();
+            const titleNode = document.getElementById('billErrorPopupTitle');
+            const messageNode = document.getElementById('billErrorPopupMessage');
+            const actionWrap = document.getElementById('billErrorPopupActions');
+            const actionLink = document.getElementById('billErrorPopupActionLink');
+            const title = options && options.title ? options.title : 'Lỗi dữ liệu';
+            const actionUrl = options && options.actionUrl ? options.actionUrl : '';
+            const actionLabel = options && options.actionLabel ? options.actionLabel : 'Xem cấu hình';
+            const persistent = !!(options && options.persist);
+
+            if (titleNode) {
+                titleNode.textContent = title;
+            }
+            if (messageNode) {
+                messageNode.textContent = message || 'Vui lòng kiểm tra lại dữ liệu nhập.';
+            }
+            if (actionWrap && actionLink) {
+                if (actionUrl) {
+                    actionLink.href = actionUrl;
+                    actionLink.textContent = actionLabel;
+                    actionWrap.classList.remove('hidden');
+                    actionWrap.classList.add('flex');
+                } else {
+                    actionWrap.classList.add('hidden');
+                    actionWrap.classList.remove('flex');
+                    actionLink.setAttribute('href', '#');
+                }
+            }
+
+            popup.classList.remove('hidden');
+
+            if (errorPopupTimer) {
+                clearTimeout(errorPopupTimer);
+                errorPopupTimer = null;
+            }
+            if (!persistent) {
+                errorPopupTimer = setTimeout(function() {
+                    popup.classList.add('hidden');
+                }, 3200);
+            }
+        }
+
+        function getFieldLabel(input) {
+            if (!input) return 'trường dữ liệu';
+            const row = input.closest('.quote-line');
+            if (row && input.name === 'line_item_type') return 'sản phẩm';
+            if (row && input.name === 'line_quantity') return 'số lượng';
+            if (row && input.name === 'line_unit_price') return 'đơn giá';
+            if (input.name === 'customer_id') return 'khách hàng';
+            if (input.name === 'total_amount') return 'tổng tiền';
+            return 'trường dữ liệu';
+        }
+
+        function buildValidationMessage(input) {
+            if (!input || !input.validity) return 'Dữ liệu chưa hợp lệ. Vui lòng kiểm tra lại.';
+            const label = getFieldLabel(input);
+            if (input.validity.valueMissing) return 'Vui lòng nhập ' + label + '.';
+            if (input.validity.typeMismatch) return 'Định dạng ' + label + ' chưa đúng.';
+            if (input.validity.rangeUnderflow) {
+                if (input.name === 'line_quantity') return 'Số lượng phải lớn hơn hoặc bằng 1.';
+                if (input.name === 'line_unit_price') return 'Đơn giá phải lớn hơn 0.';
+                return 'Giá trị ' + label + ' nhỏ hơn mức cho phép.';
+            }
+            if (input.validity.stepMismatch) {
+                if (input.name === 'line_unit_price') return 'Đơn giá chỉ được nhập số dương hợp lệ.';
+                if (input.name === 'line_quantity') return 'Số lượng phải là số nguyên hợp lệ.';
+                return 'Giá trị ' + label + ' không đúng bước nhập cho phép.';
+            }
+            if (input.validity.badInput) return 'Giá trị ' + label + ' không hợp lệ.';
+            return 'Dữ liệu chưa hợp lệ. Vui lòng kiểm tra lại.';
+        }
+
+        function setQuickCustomerStatus(message, isError) {
+            if (!quickCustomerStatus) return;
+            quickCustomerStatus.classList.remove('hidden', 'border-red-200', 'text-red-700', 'bg-red-50', 'border-emerald-200', 'text-emerald-700', 'bg-emerald-50');
+            quickCustomerStatus.classList.add(isError ? 'border-red-200' : 'border-emerald-200');
+            quickCustomerStatus.classList.add(isError ? 'text-red-700' : 'text-emerald-700');
+            quickCustomerStatus.classList.add(isError ? 'bg-red-50' : 'bg-emerald-50');
+            quickCustomerStatus.textContent = message || '';
+        }
+
+        function openQuickCustomerModal() {
+            if (!quickCustomerModal) return;
+            quickCustomerModal.classList.remove('hidden');
+            quickCustomerModal.classList.add('flex');
+            document.body.classList.add('overflow-hidden');
+            if (quickCustomerForm) {
+                quickCustomerForm.reset();
+            }
+            if (quickCustomerStatus) {
+                quickCustomerStatus.classList.add('hidden');
+                quickCustomerStatus.textContent = '';
+            }
+            const firstInput = quickCustomerForm ? quickCustomerForm.querySelector('input[name="customer_name"]') : null;
+            if (firstInput) firstInput.focus();
+        }
+
+        function closeQuickCustomerModal() {
+            if (!quickCustomerModal) return;
+            quickCustomerModal.classList.add('hidden');
+            quickCustomerModal.classList.remove('flex');
+            if ((!addModal || addModal.classList.contains('hidden')) && (!deleteBillModal || deleteBillModal.classList.contains('hidden')) && (!qrModal || qrModal.classList.contains('hidden'))) {
+                document.body.classList.remove('overflow-hidden');
             }
         }
 
@@ -642,7 +1094,8 @@
             addModal.classList.add('flex');
             document.body.classList.add('overflow-hidden');
             ensureBillCustomerSelected();
-            if (billWoSelect) billWoSelect.focus();
+            resetQuoteLines();
+            if (billCustomerSelect) billCustomerSelect.focus();
         }
 
         function closeAddModal() {
@@ -716,6 +1169,7 @@
                     qrCountdown.textContent = 'Đã hết hạn';
                     qrCountdown.classList.add('text-red-500', 'dark:text-red-400');
                     qrCountdown.classList.remove('text-slate-500', 'dark:text-slate-400');
+                    markQrAsExpiredOnUi();
                     stopQrCountdown();
                     return;
                 }
@@ -751,24 +1205,177 @@
                 qrCountdown.classList.add('text-slate-500', 'dark:text-slate-400');
             }
         }
+
+        function buildInvoiceViewUrl(billId) {
+            return '<%= request.getContextPath() %>/BillController?action=viewBillDetail&bill_id=' + encodeURIComponent(String(billId || ''));
+        }
+
+        function buildInvoiceDownloadUrl(billId) {
+            return '<%= request.getContextPath() %>/BillController?action=downloadBill&bill_id=' + encodeURIComponent(String(billId || ''));
+        }
+
+        function openInvoiceModalByBillId(billId) {
+            if (!billId || !invoiceModal || !invoiceModalFrame) return;
+            invoiceModalFrame.src = buildInvoiceViewUrl(billId);
+            if (invoiceModalDownload) {
+                invoiceModalDownload.href = buildInvoiceDownloadUrl(billId);
+            }
+            if (invoiceModalDownloadPdf) {
+                invoiceModalDownloadPdf.href = buildInvoiceDownloadUrl(billId);
+            }
+            if (invoiceModalPrint) {
+                invoiceModalPrint.onclick = function () {
+                    try {
+                        if (invoiceModalFrame && invoiceModalFrame.contentWindow) {
+                            invoiceModalFrame.contentWindow.focus();
+                            invoiceModalFrame.contentWindow.print();
+                        }
+                    } catch (e) {
+                        window.print();
+                    }
+                };
+            }
+            invoiceModal.classList.remove('hidden');
+            invoiceModal.classList.add('flex');
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function closeInvoiceModal() {
+            if (!invoiceModal || !invoiceModalFrame) return;
+            invoiceModal.classList.add('hidden');
+            invoiceModal.classList.remove('flex');
+            invoiceModalFrame.src = 'about:blank';
+            if (invoiceModalDownload) {
+                invoiceModalDownload.href = '#';
+            }
+            if (invoiceModalDownloadPdf) {
+                invoiceModalDownloadPdf.href = '#';
+            }
+            if (invoiceModalPrint) {
+                invoiceModalPrint.onclick = null;
+            }
+            if ((!addModal || addModal.classList.contains('hidden'))
+                    && (!deleteBillModal || deleteBillModal.classList.contains('hidden'))
+                    && (!qrModal || qrModal.classList.contains('hidden'))
+                    && (!quickCustomerModal || quickCustomerModal.classList.contains('hidden'))) {
+                document.body.classList.remove('overflow-hidden');
+            }
+        }
+
+        function updateQrInvoiceActions(billId, paymentStatus) {
+            if (!qrInvoiceActions) return;
+            const safeBillId = billId ? String(billId) : '';
+            const hasBillId = !!safeBillId;
+            const normalizedStatus = String(paymentStatus || '').toUpperCase();
+            qrInvoiceActions.classList.toggle('hidden', !hasBillId);
+            if (qrDownloadInvoiceLink) {
+                qrDownloadInvoiceLink.href = hasBillId ? buildInvoiceDownloadUrl(safeBillId) : '#';
+            }
+            if (qrViewInvoiceLink) {
+                qrViewInvoiceLink.href = hasBillId ? buildInvoiceViewUrl(safeBillId) : '#';
+                qrViewInvoiceLink.onclick = null;
+            }
+            if (qrRecreateButton) {
+                qrRecreateButton.classList.add('hidden');
+                qrRecreateButton.dataset.billId = safeBillId;
+                qrRecreateButton.dataset.paymentStatus = normalizedStatus;
+            }
+        }
+
+        function markQrAsExpiredOnUi() {
+            const qrBillIdInput = document.getElementById('qrBillId');
+            const currentBillId = qrBillIdInput ? qrBillIdInput.value : '';
+            if (qrImageWrap) {
+                qrImageWrap.innerHTML = '<div class="flex h-[200px] w-[200px] items-center justify-center rounded-xl bg-slate-200 text-center text-sm text-slate-500 dark:bg-slate-700 dark:text-slate-300">Mã QR đã hết hạn</div>';
+            }
+            if (currentBillId) {
+                updateBillRowPaymentState({
+                    billId: currentBillId,
+                    paymentId: document.getElementById('qrPaymentId') ? document.getElementById('qrPaymentId').value : '',
+                    amount: document.getElementById('qrAmount') ? document.getElementById('qrAmount').value : '',
+                    bankBin: qrBankBinInput ? qrBankBinInput.value : '',
+                    bankAccount: qrBankAccountInput ? qrBankAccountInput.value : '',
+                    bankAccountName: qrBankAccountNameInput ? qrBankAccountNameInput.value : '',
+                    expiresAt: qrResultExpiresAt ? qrResultExpiresAt.textContent : '',
+                    paidAt: '',
+                    status: 'EXPIRED',
+                    qrImageBase64: ''
+                });
+                updateQrInvoiceActions(currentBillId, 'EXPIRED');
+            }
+        }
+
+        function openPaymentDetail(trigger) {
+            if (!trigger) return;
+            const billId = trigger.getAttribute('data-bill-id') || '';
+            if (billId) {
+                window.location.href = buildInvoiceViewUrl(billId);
+            }
+        }
  
+        function getBankDisplayName(bankBin) {
+            const code = String(bankBin || '').trim();
+            if (!code) return '--';
+            const bankMap = {
+                '970403': 'Sacombank',
+                '970405': 'Agribank',
+                '970407': 'Techcombank',
+                '970412': 'PVcomBank',
+                '970414': 'OceanBank (MBV)',
+                '970415': 'VietinBank',
+                '970416': 'ACB',
+                '970418': 'BIDV',
+                '970419': 'NCB',
+                '970422': 'MBBank',
+                '970423': 'TPBank',
+                '970424': 'Shinhan Bank Vietnam',
+                '970425': 'ABBank',
+                '970427': 'VietABank',
+                '970428': 'Nam A Bank',
+                '970429': 'Saigonbank',
+                '970430': 'PGBank',
+                '970431': 'Eximbank',
+                '970432': 'VPBank',
+                '970433': 'VietBank',
+                '970434': 'Indovina Bank',
+                '970436': 'Vietcombank',
+                '970437': 'HDBank',
+                '970438': 'BaoViet Bank',
+                '970439': 'Public Bank Vietnam',
+                '970440': 'SeABank',
+                '970441': 'VIB',
+                '970442': 'Hong Leong Bank Vietnam',
+                '970443': 'SHB',
+                '970444': 'CBBank (VNCB)',
+                '970446': 'Co-opBank',
+                '970448': 'OCB',
+                '970449': 'LienVietPostBank (LPBank)',
+                '970452': 'KienlongBank',
+                '970454': 'VietCapitalBank (BVB)',
+                '970457': 'Woori Bank Vietnam',
+                '970458': 'United Overseas Bank Vietnam (UOB)'
+            };
+            return bankMap[code] || code;
+        }
+
         function renderQrResult(result) {
             if (!qrResult) return;
-            const bankCode = result.bankBin || '--';
+            const bankName = getBankDisplayName(result.bankBin);
             const bankAccount = result.bankAccount || '--';
             const bankAccountName = result.bankAccountName || 'PMS Company';
             const expiresAt = result.expiresAt || '--';
             const paidAt = result.paidAt || '';
             const paymentStatus = (result.status || '').toUpperCase();
             const qrImageBase64 = result.qrImageBase64 || '';
+            const hasQrImage = paymentStatus !== 'EXPIRED' && !!qrImageBase64;
  
             if (qrImageWrap) {
-                qrImageWrap.innerHTML = qrImageBase64
+                qrImageWrap.innerHTML = hasQrImage
                     ? '<img src="data:image/png;base64,' + qrImageBase64 + '" alt="QR Code" class="mx-auto h-[200px] w-[200px] rounded-xl border border-slate-200 bg-white p-1" />'
-                    : '<div class="flex h-[200px] w-[200px] items-center justify-center rounded-xl bg-slate-200 text-center text-sm text-slate-500 dark:bg-slate-700 dark:text-slate-300">Không có dữ liệu QR</div>';
+                    : '<div class="flex h-[200px] w-[200px] items-center justify-center rounded-xl bg-slate-200 text-center text-sm text-slate-500 dark:bg-slate-700 dark:text-slate-300">' + (paymentStatus === 'EXPIRED' ? 'Mã QR đã hết hạn' : 'Không có dữ liệu QR') + '</div>';
             }
  
-            if (qrResultBankName) qrResultBankName.textContent = bankCode;
+            if (qrResultBankName) qrResultBankName.textContent = bankName;
             if (qrResultBankAccount) qrResultBankAccount.textContent = bankAccount;
             if (qrResultBankAccountName) qrResultBankAccountName.textContent = bankAccountName;
  
@@ -785,6 +1392,19 @@
                     qrCountdown.classList.remove('text-slate-500', 'dark:text-slate-400', 'text-red-500', 'dark:text-red-400');
                     qrCountdown.classList.add('text-emerald-600', 'dark:text-emerald-300');
                 }
+            } else if (paymentStatus === 'EXPIRED') {
+                stopQrCountdown();
+                if (qrTimeLabel) qrTimeLabel.textContent = 'Trạng thái';
+                if (qrResultExpiresAt) {
+                    qrResultExpiresAt.textContent = 'QR đã hết hạn';
+                    qrResultExpiresAt.classList.remove('text-emerald-600', 'dark:text-emerald-300');
+                    qrResultExpiresAt.classList.add('text-amber-600', 'dark:text-amber-300');
+                }
+                if (qrCountdown) {
+                    qrCountdown.textContent = 'Vui lòng tạo lại mã QR';
+                    qrCountdown.classList.remove('text-slate-500', 'dark:text-slate-400', 'text-emerald-600', 'dark:text-emerald-300');
+                    qrCountdown.classList.add('text-red-500', 'dark:text-red-400');
+                }
             } else {
                 if (qrTimeLabel) qrTimeLabel.textContent = 'Hết hạn';
                 if (qrResultExpiresAt) {
@@ -796,6 +1416,8 @@
             }
  
             qrResult.classList.remove('hidden');
+            const qrBillIdValue = document.getElementById('qrBillId') ? document.getElementById('qrBillId').value : '';
+            updateQrInvoiceActions(qrBillIdValue, paymentStatus);
         }
 
         function applyStatusBadge(element, type) {
@@ -823,11 +1445,9 @@
             const billId = result.billId;
             const status = (result.status || '').toUpperCase();
             const statusBadge = document.getElementById('bill-status-' + billId);
-            const paymentBadge = document.getElementById('payment-status-' + billId);
             const viewButton = document.getElementById('view-qr-btn-' + billId);
             const confirmButton = document.getElementById('confirm-payment-btn-' + billId);
             const confirmForm = confirmButton ? confirmButton.closest('form') : null;
-            const createButton = document.getElementById('create-qr-btn-' + billId);
             const paymentType = status === 'PAID' ? 'paid' : status === 'EXPIRED' ? 'expired' : 'pending';
 
             if (statusBadge) {
@@ -835,12 +1455,11 @@
                 statusBadge.textContent = status === 'PAID' ? 'Đã thanh toán' : status === 'EXPIRED' ? 'Hết hạn QR' : 'Chờ thanh toán';
                 statusBadge.classList.toggle('hidden', status === 'PAID');
             }
-            if (paymentBadge) {
-                applyPaymentBadge(paymentBadge, paymentType);
-                paymentBadge.textContent = status === 'PAID' ? 'Đã thanh toán' : status === 'EXPIRED' ? 'Đã hết hạn' : 'Chờ thanh toán';
-            }
             if (viewButton) {
-                viewButton.dataset.mode = 'view';
+                const isPaid = status === 'PAID';
+                const isExpired = status === 'EXPIRED';
+                const mode = isPaid ? 'view' : (isExpired ? 'recreate' : 'view');
+                viewButton.dataset.mode = mode;
                 viewButton.dataset.paymentId = result.paymentId || viewButton.dataset.paymentId || '';
                 viewButton.dataset.amount = result.amount || viewButton.dataset.amount || '';
                 viewButton.dataset.bankBin = result.bankBin || '';
@@ -849,7 +1468,22 @@
                 viewButton.dataset.expiresAt = result.expiresAt || '';
                 viewButton.dataset.paidAt = result.paidAt || '';
                 viewButton.dataset.paymentStatus = status;
-                viewButton.dataset.qrImageBase64 = result.qrImageBase64 || '';
+                viewButton.dataset.qrImageBase64 = isExpired ? '' : (result.qrImageBase64 || '');
+                viewButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-500/30', 'bg-indigo-600', 'hover:bg-indigo-700', 'shadow-indigo-500/30', 'bg-orange-500', 'hover:bg-orange-600', 'shadow-orange-500/30');
+                if (isPaid) {
+                    viewButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700', 'shadow-indigo-500/30');
+                } else if (isExpired) {
+                    viewButton.classList.add('bg-orange-500', 'hover:bg-orange-600', 'shadow-orange-500/30');
+                } else {
+                    viewButton.classList.add('bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-500/30');
+                }
+                viewButton.title = isPaid ? 'Xem hóa đơn' : (isExpired ? 'Tạo lại QR' : 'Xem mã QR thanh toán');
+                viewButton.setAttribute('aria-label', viewButton.title);
+                viewButton.innerHTML = isPaid
+                    ? '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>'
+                    : (isExpired
+                    ? '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12a8 8 0 0113.66-5.66L20 8M20 4v4h-4M20 12a8 8 0 01-13.66 5.66L4 16M4 20v-4h4"></path></svg>'
+                    : '<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h3v3H7V7zm7 0h3v3h-3V7zM7 14h3v3H7v-3zm7 0h3m-3 3h3m-3-6h3m-10 3h3m1 4H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v5"></path></svg>');
             }
             if (confirmForm) {
                 confirmForm.classList.toggle('hidden', status === 'PAID' || status === 'EXPIRED');
@@ -859,25 +1493,20 @@
                     paymentIdInput.value = result.paymentId || paymentIdInput.value;
                 }
             }
-            if (createButton) {
-                createButton.classList.toggle('hidden', status === 'PAID');
-                createButton.dataset.mode = status === 'PENDING' || status === 'EXPIRED' ? 'recreate' : 'create';
-                createButton.title = status === 'PENDING' || status === 'EXPIRED' ? 'Tạo lại QR' : 'Tạo QR';
-                createButton.setAttribute('aria-label', createButton.title);
-            }
         }
 
         function setQrModalMode(mode) {
             const isViewMode = mode === 'view';
-            if (qrModalTitle) qrModalTitle.textContent = isViewMode ? 'Xem mã QR thanh toán' : 'Tạo mã QR thanh toán';
+            if (qrModalTitle) qrModalTitle.textContent = isViewMode ? 'Xem mã QR thanh toán' : (mode === 'recreate' ? 'Tạo lại mã QR thanh toán' : 'Tạo mã QR thanh toán');
             if (qrModalDescription) {
                 qrModalDescription.textContent = isViewMode
-                    ? 'Hiển thị QR hiện có cùng thông tin ngân hàng và thời gian hiệu lực ngay trên trang hóa đơn.'
+                    ? ''
                     : 'Tạo hoặc tạo lại giao dịch QR trực tiếp ngay trong quản lý hóa đơn.';
             }
             if (qrFormFields) qrFormFields.classList.toggle('hidden', isViewMode);
             if (qrSubmitButton) qrSubmitButton.classList.toggle('hidden', isViewMode);
             if (qrSubmitLabel) qrSubmitLabel.textContent = mode === 'recreate' ? 'Tạo lại mã QR' : 'Tạo mã QR';
+            if (qrInvoiceActions) qrInvoiceActions.classList.toggle('hidden', !isViewMode);
         }
 
         function openQrModal(trigger) {
@@ -891,8 +1520,23 @@
             document.getElementById('qrAmount').value = mode === 'view' ? (amount || '') : '';
             document.getElementById('qrCustomerName').value = customerName || '';
             document.getElementById('qrCustomerEmail').value = customerEmail || '';
+            const qrPaymentIdInput = document.getElementById('qrPaymentId');
+            if (qrPaymentIdInput) {
+                qrPaymentIdInput.value = trigger ? (trigger.getAttribute('data-payment-id') || '') : '';
+            }
+            if (qrCreateForm) {
+                qrCreateForm.dataset.mode = mode;
+            }
+            if (mode === 'view' && qrBankBinInput && qrBankAccountInput && qrBankAccountNameInput) {
+                qrBankBinInput.value = trigger.getAttribute('data-bank-bin') || '';
+                qrBankAccountInput.value = trigger.getAttribute('data-bank-account') || '';
+                qrBankAccountNameInput.value = trigger.getAttribute('data-bank-account-name') || '';
+            } else {
+                syncQrReceiverAccountFields();
+            }
             resetQrResult();
             setQrModalMode(mode);
+            updateQrInvoiceActions(billId, trigger ? (trigger.getAttribute('data-payment-status') || '') : '');
 
             if (mode === 'view') {
                 renderQrResult({
@@ -930,9 +1574,200 @@
             resetQrResult();
         }
 
+        async function handleCreateOrRecreateQr(trigger) {
+            if (!trigger) return;
+            const mode = trigger.getAttribute('data-mode') || 'create';
+            if (mode !== 'recreate') {
+                openQrModal(trigger);
+                return;
+            }
+
+            const paymentId = trigger.getAttribute('data-payment-id') || '';
+            if (!paymentId) {
+                openQrModal(trigger);
+                return;
+            }
+
+            const originalHtml = trigger.innerHTML;
+            const billId = trigger.getAttribute('data-bill-id') || '';
+            try {
+                trigger.disabled = true;
+                trigger.classList.add('opacity-60', 'cursor-not-allowed');
+                trigger.innerHTML = '<svg class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"></path></svg>';
+
+                const payload = new URLSearchParams();
+                payload.set('action', 'refreshQr');
+                payload.set('source', 'bill');
+                payload.set('ajax', '1');
+                payload.set('payment_id', paymentId);
+                payload.set('expire_minutes', '1440');
+
+                const response = await fetch('<%= request.getContextPath() %>/PaymentController', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                    },
+                    body: payload.toString()
+                });
+
+                const responseText = await response.text();
+                const result = responseText ? JSON.parse(responseText) : null;
+                if (!response.ok || !result || !result.success) {
+                    showBillToast((result && result.message) || 'Không thể tạo lại mã QR.', 'error');
+                    return;
+                }
+
+                updateBillRowPaymentState(result);
+                const viewButton = document.getElementById('view-qr-btn-' + (result.billId || billId));
+                if (viewButton) {
+                    openQrModal(viewButton);
+                }
+                showBillToast(result.message || 'Đã tạo lại mã QR thành công.', 'success');
+            } catch (error) {
+                showBillToast(error.message || 'Không thể tạo lại mã QR ngay trên trang.', 'error');
+            } finally {
+                trigger.disabled = false;
+                trigger.classList.remove('opacity-60', 'cursor-not-allowed');
+                trigger.innerHTML = originalHtml;
+            }
+        }
+
+        if (qrRecreateButton) {
+            qrRecreateButton.addEventListener('click', function() {
+                const billId = this.dataset.billId || '';
+                if (!billId) {
+                    showBillToast('Không xác định được hóa đơn để tạo lại mã QR.', 'error');
+                    return;
+                }
+                const viewButton = document.getElementById('view-qr-btn-' + billId);
+                if (!viewButton) {
+                    showBillToast('Không tìm thấy dữ liệu hóa đơn để tạo lại mã QR.', 'error');
+                    return;
+                }
+                viewButton.dataset.mode = 'recreate';
+                handleCreateOrRecreateQr(viewButton);
+            });
+        }
+
         if (addModal) {
             addModal.addEventListener('click', function(e) {
                 if (e.target === this) closeAddModal();
+            });
+        }
+
+        if (quickCustomerModal) {
+            quickCustomerModal.addEventListener('click', function(e) {
+                if (e.target === this) closeQuickCustomerModal();
+            });
+        }
+
+        if (quickCustomerForm) {
+            quickCustomerForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const submitBtn = quickCustomerForm.querySelector('button[type="submit"]');
+                const nameInput = quickCustomerForm.querySelector('input[name="customer_name"]');
+                const phoneInput = quickCustomerForm.querySelector('input[name="phone"]');
+                const emailInput = quickCustomerForm.querySelector('input[name="email"]');
+                const customerName = nameInput ? nameInput.value.trim() : '';
+                const phone = phoneInput ? phoneInput.value.trim() : '';
+                const email = emailInput ? emailInput.value.trim() : '';
+
+                if (!customerName) {
+                    setQuickCustomerStatus('Vui lòng nhập tên khách hàng.', true);
+                    if (nameInput) nameInput.focus();
+                    return;
+                }
+                if (customerName.length > 100) {
+                    setQuickCustomerStatus('Tên khách hàng không được vượt quá 100 ký tự.', true);
+                    if (nameInput) nameInput.focus();
+                    return;
+                }
+                if (!phone) {
+                    setQuickCustomerStatus('Vui lòng nhập số điện thoại khách hàng.', true);
+                    if (phoneInput) phoneInput.focus();
+                    return;
+                }
+                if (phone.length > 15) {
+                    setQuickCustomerStatus('Số điện thoại không được vượt quá 15 ký tự.', true);
+                    if (phoneInput) phoneInput.focus();
+                    return;
+                }
+                if (!/^[0-9+\-\s().]{8,15}$/.test(phone)) {
+                    setQuickCustomerStatus('Số điện thoại không hợp lệ.', true);
+                    if (phoneInput) phoneInput.focus();
+                    return;
+                }
+                if (!email) {
+                    setQuickCustomerStatus('Vui lòng nhập email khách hàng.', true);
+                    if (emailInput) emailInput.focus();
+                    return;
+                }
+                if (email.length > 50) {
+                    setQuickCustomerStatus('Email khách hàng không được vượt quá 50 ký tự.', true);
+                    if (emailInput) emailInput.focus();
+                    return;
+                }
+
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                }
+
+                try {
+                    const payload = new URLSearchParams();
+                    payload.set('action', 'addCustomerForBill');
+                    payload.set('customer_name', customerName);
+                    payload.set('phone', phone);
+                    payload.set('email', email);
+
+                    const response = await fetch('<%= request.getContextPath() %>/BillController', {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                        },
+                        body: payload.toString()
+                    });
+
+                    const raw = await response.text();
+                    let result = null;
+                    try {
+                        result = raw ? JSON.parse(raw) : null;
+                    } catch (e) {
+                        throw new Error('Phản hồi thêm khách hàng không hợp lệ.');
+                    }
+
+                    if (!response.ok || !result || !result.success) {
+                        setQuickCustomerStatus((result && result.message) || 'Không thể tạo khách hàng mới.', true);
+                        return;
+                    }
+
+                    if (billCustomerSelect) {
+                        let option = billCustomerSelect.querySelector('option[value="' + result.customerId + '"]');
+                        if (!option) {
+                            option = document.createElement('option');
+                            option.value = String(result.customerId);
+                            option.textContent = result.customerName || ('KH #' + result.customerId);
+                            billCustomerSelect.appendChild(option);
+                        }
+                        billCustomerSelect.value = String(result.customerId);
+                    }
+
+                    setQuickCustomerStatus(result.message || 'Đã tạo khách hàng và chọn vào danh sách.', false);
+                    setTimeout(function() {
+                        closeQuickCustomerModal();
+                    }, 450);
+                } catch (error) {
+                    setQuickCustomerStatus(error.message || 'Không thể tạo khách hàng mới.', true);
+                } finally {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                    }
+                }
             });
         }
 
@@ -948,6 +1783,12 @@
             });
         }
 
+        if (invoiceModal) {
+            invoiceModal.addEventListener('click', function(e) {
+                if (e.target === this) closeInvoiceModal();
+            });
+        }
+ 
         if (qrCreateForm) {
             qrCreateForm.addEventListener('submit', async function(event) {
                 event.preventDefault();
@@ -963,14 +1804,23 @@
                     }
  
                     const payload = new URLSearchParams();
-                    payload.set('action', 'createQr');
+                    const currentMode = qrCreateForm ? (qrCreateForm.dataset.mode || 'create') : 'create';
+                    const currentPaymentId = document.getElementById('qrPaymentId') ? document.getElementById('qrPaymentId').value : '';
+                    const recreateMode = currentMode === 'recreate' && !!currentPaymentId;
+                    payload.set('action', recreateMode ? 'refreshQr' : 'createQr');
                     payload.set('source', 'bill');
                     payload.set('ajax', '1');
                     payload.set('bill_id', document.getElementById('qrBillId').value || '');
+                    if (recreateMode) {
+                        payload.set('payment_id', currentPaymentId);
+                    }
                     payload.set('amount', document.getElementById('qrAmount').value || '');
                     payload.set('customer_name', document.getElementById('qrCustomerName').value || '');
                     payload.set('customer_email', document.getElementById('qrCustomerEmail').value || '');
-                    payload.set('expire_minutes', qrCreateForm.querySelector('select[name="expire_minutes"]') ? qrCreateForm.querySelector('select[name="expire_minutes"]').value : '15');
+                    payload.set('expire_minutes', qrCreateForm.querySelector('select[name="expire_minutes"]') ? qrCreateForm.querySelector('select[name="expire_minutes"]').value : '1440');
+                    payload.set('bank_bin', qrBankBinInput ? qrBankBinInput.value : '');
+                    payload.set('bank_account', qrBankAccountInput ? qrBankAccountInput.value : '');
+                    payload.set('bank_account_name', qrBankAccountNameInput ? qrBankAccountNameInput.value : '');
 
                     const response = await fetch('<%= request.getContextPath() %>/PaymentController', {
                         method: 'POST',
@@ -1012,14 +1862,144 @@
             });
         }
 
-        async function confirmPaymentInline(form) {
-            if (!form || !confirm('Xác nhận khách hàng đã thanh toán?')) {
+        function showBillToast(message, type) {
+            const toast = document.createElement('div');
+            const isSuccess = type === 'success';
+            toast.style.position = 'fixed';
+            toast.style.right = '24px';
+            toast.style.top = '24px';
+            toast.style.zIndex = '9999';
+            toast.style.minWidth = '320px';
+            toast.style.maxWidth = '420px';
+            toast.style.padding = '14px 16px';
+            toast.style.borderRadius = '16px';
+            toast.style.border = isSuccess ? '1px solid #86efac' : '1px solid #fecaca';
+            toast.style.background = isSuccess ? '#f0fdf4' : '#fff1f2';
+            toast.style.color = isSuccess ? '#166534' : '#9f1239';
+            toast.style.boxShadow = '0 16px 40px rgba(15, 23, 42, 0.18)';
+            toast.style.transform = 'translateY(-8px)';
+            toast.style.opacity = '0';
+            toast.style.transition = 'all 0.25s ease';
+            toast.innerHTML = ''
+                + '<div style="display:flex;align-items:flex-start;gap:12px">'
+                + '  <div style="font-size:18px;line-height:1">' + (isSuccess ? '✅' : '⚠️') + '</div>'
+                + '  <div style="flex:1">'
+                + '      <div style="font-size:14px;font-weight:700;margin-bottom:2px">' + (isSuccess ? 'Thành công' : 'Thông báo') + '</div>'
+                + '      <div style="font-size:13px;line-height:1.5">' + String(message || '') + '</div>'
+                + '  </div>'
+                + '</div>';
+            document.body.appendChild(toast);
+            requestAnimationFrame(function() {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateY(0)';
+            });
+            setTimeout(function() {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-8px)';
+                setTimeout(function() {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 250);
+            }, 2600);
+        }
+
+        let activeConfirmPaymentOverlay = null;
+
+        function removeConfirmPaymentOverlay() {
+            if (activeConfirmPaymentOverlay && activeConfirmPaymentOverlay.parentNode) {
+                activeConfirmPaymentOverlay.parentNode.removeChild(activeConfirmPaymentOverlay);
+            }
+            activeConfirmPaymentOverlay = null;
+        }
+
+        function askConfirmPayment(message) {
+            return new Promise(function(resolve) {
+                removeConfirmPaymentOverlay();
+
+                const overlay = document.createElement('div');
+                activeConfirmPaymentOverlay = overlay;
+                overlay.style.position = 'fixed';
+                overlay.style.inset = '0';
+                overlay.style.background = 'rgba(15, 23, 42, 0.45)';
+                overlay.style.backdropFilter = 'blur(4px)';
+                overlay.style.zIndex = '9998';
+                overlay.style.display = 'flex';
+                overlay.style.alignItems = 'center';
+                overlay.style.justifyContent = 'center';
+                overlay.style.padding = '16px';
+
+                const dialog = document.createElement('div');
+                dialog.style.width = '100%';
+                dialog.style.maxWidth = '420px';
+                dialog.style.borderRadius = '24px';
+                dialog.style.background = '#ffffff';
+                dialog.style.padding = '24px';
+                dialog.style.boxShadow = '0 24px 60px rgba(15, 23, 42, 0.25)';
+                dialog.innerHTML = ''
+                    + '<div style="display:flex;align-items:flex-start;gap:14px">'
+                    + '  <div style="display:flex;height:44px;width:44px;align-items:center;justify-content:center;border-radius:999px;background:#ecfdf5;color:#059669;font-size:20px">✓</div>'
+                    + '  <div style="flex:1">'
+                    + '      <div style="font-size:18px;font-weight:700;color:#0f172a">Xác nhận thanh toán</div>'
+                    + '      <div style="margin-top:8px;font-size:14px;line-height:1.6;color:#475569">' + String(message || '') + '</div>'
+                    + '  </div>'
+                    + '</div>'
+                    + '<div style="margin-top:22px;display:flex;justify-content:flex-end;gap:10px">'
+                    + '  <button type="button" data-action="cancel" style="border:none;border-radius:14px;background:#e2e8f0;color:#334155;padding:10px 16px;font-weight:600;cursor:pointer">Huỷ</button>'
+                    + '  <button type="button" data-action="confirm" style="border:none;border-radius:14px;background:#059669;color:#ffffff;padding:10px 16px;font-weight:700;cursor:pointer">Xác nhận</button>'
+                    + '</div>';
+
+                overlay.appendChild(dialog);
+                document.body.appendChild(overlay);
+
+                function close(result) {
+                    removeConfirmPaymentOverlay();
+                    resolve(result);
+                }
+
+                function handleKeydown(event) {
+                    if (event.key === 'Escape') {
+                        document.removeEventListener('keydown', handleKeydown);
+                        close(false);
+                    }
+                }
+
+                document.addEventListener('keydown', handleKeydown);
+                overlay.addEventListener('click', function(event) {
+                    if (event.target === overlay) {
+                        document.removeEventListener('keydown', handleKeydown);
+                        close(false);
+                    }
+                });
+                dialog.querySelector('[data-action="cancel"]').addEventListener('click', function() {
+                    document.removeEventListener('keydown', handleKeydown);
+                    close(false);
+                });
+                dialog.querySelector('[data-action="confirm"]').addEventListener('click', function() {
+                    document.removeEventListener('keydown', handleKeydown);
+                    close(true);
+                });
+            });
+        }
+
+        async function confirmPaymentInline(event, form) {
+            if (event) {
+                event.preventDefault();
+            }
+            if (!form) {
+                return false;
+            }
+
+            const accepted = await askConfirmPayment('Xác nhận khách hàng đã thanh toán cho hóa đơn này?');
+            if (!accepted) {
+                removeConfirmPaymentOverlay();
                 return false;
             }
 
             const submitButton = form.querySelector('button[type="submit"]');
             const originalButtonHtml = submitButton ? submitButton.innerHTML : '';
             try {
+                removeConfirmPaymentOverlay();
                 if (submitButton) {
                     submitButton.disabled = true;
                     submitButton.classList.add('opacity-60', 'cursor-not-allowed');
@@ -1042,9 +2022,17 @@
                 });
 
                 const responseText = await response.text();
-                const result = responseText ? JSON.parse(responseText) : null;
+                let result = null;
+                try {
+                    result = responseText ? JSON.parse(responseText) : null;
+                } catch (parseError) {
+                    throw new Error(responseText && responseText.trim()
+                        ? 'Phản hồi xác nhận thanh toán không hợp lệ: ' + responseText.substring(0, 180)
+                        : 'Phản hồi xác nhận thanh toán không hợp lệ.');
+                }
+
                 if (!response.ok || !result || !result.success) {
-                    alert((result && result.message) || 'Không thể xác nhận thanh toán.');
+                    showBillToast((result && result.message) || 'Không thể xác nhận thanh toán.', 'error');
                     return false;
                 }
 
@@ -1053,9 +2041,14 @@
                     setQrModalMode('view');
                     renderQrResult(result);
                 }
+                window.setTimeout(function() {
+                    window.location.href = '<%= request.getContextPath() %>/MainController?action=listBill';
+                }, 180);
+                showBillToast(result.message || 'Đã xác nhận thanh toán thành công.', 'success');
             } catch (error) {
-                alert(error.message || 'Không thể xác nhận thanh toán.');
+                showBillToast(error.message || 'Không thể xác nhận thanh toán.', 'error');
             } finally {
+                removeConfirmPaymentOverlay();
                 if (submitButton) {
                     submitButton.disabled = false;
                     submitButton.classList.remove('opacity-60', 'cursor-not-allowed');
@@ -1065,42 +2058,93 @@
             return false;
         }
  
-        if (billWoSelect) {
-            billWoSelect.addEventListener('change', syncBillCustomerFromWo);
-        }
-
         if (billTotalAmount) {
             billTotalAmount.addEventListener('blur', function() {
                 const numericValue = Number(this.value || 0);
-                if (numericValue > 0 && numericValue < 1000) {
-                    this.value = 1000;
+                if (numericValue > 0) {
+                    this.value = String(Math.round(numericValue * 100) / 100);
                 }
             });
         }
 
         if (addBillForm) {
+            addBillForm.setAttribute('novalidate', 'novalidate');
             addBillForm.addEventListener('submit', function(event) {
-                ensureBillCustomerSelected();
-                if (!billWoSelect || !billWoSelect.value) {
+                const hasSelectedCustomer = billCustomerSelect && billCustomerSelect.value;
+                if (!hasSelectedCustomer) {
                     event.preventDefault();
-                    alert('Vui lòng chọn lệnh sản xuất trước khi tạo hóa đơn.');
-                    if (billWoSelect) billWoSelect.focus();
-                    return;
-                }
-                if (!billCustomerSelect || !billCustomerSelect.value) {
-                    event.preventDefault();
-                    alert('Vui lòng chọn khách hàng hợp lệ trước khi tạo hóa đơn.');
+                    showErrorPopup('Vui lòng chọn khách hàng trước khi tạo hóa đơn.');
                     if (billCustomerSelect) billCustomerSelect.focus();
                     return;
                 }
+
+                const quoteRows = addBillForm.querySelectorAll('#quoteLinesContainer .quote-line');
+                if (!quoteRows.length) {
+                    event.preventDefault();
+                    showErrorPopup('Chi tiết báo giá phải có ít nhất 1 sản phẩm.', { title: 'Thiếu sản phẩm báo giá' });
+                    return;
+                }
+
+                recalcBillTotalFromLines();
+
+                const firstInvalid = addBillForm.querySelector(':invalid');
+                if (firstInvalid) {
+                    event.preventDefault();
+                    showErrorPopup(buildValidationMessage(firstInvalid));
+                    firstInvalid.focus();
+                    return;
+                }
+
                 if (!billTotalAmount || Number(billTotalAmount.value || 0) <= 0) {
                     event.preventDefault();
-                    alert('Vui lòng nhập tổng tiền lớn hơn 0.');
+                    showErrorPopup('Vui lòng nhập tổng tiền lớn hơn 0.');
                     if (billTotalAmount) billTotalAmount.focus();
                 }
             });
         }
 
+        const serverBillPopup = {
+            title: '<%= billPopupTitleJs %>',
+            message: '<%= billPopupMessageJs %>',
+            actionUrl: '<%= request.getContextPath() %>/<%= billPopupActionUrlJs %>',
+            actionLabel: '<%= billPopupActionLabelJs %>',
+            reopenModal: '<%= String.valueOf(billPopupReopenModal) %>' === 'true'
+        };
+
+        if (serverBillPopup.message) {
+            if (serverBillPopup.reopenModal) {
+                openAddModal();
+            }
+            showErrorPopup(serverBillPopup.message, {
+                title: serverBillPopup.title || 'Thông báo',
+                actionUrl: serverBillPopup.actionUrl,
+                actionLabel: serverBillPopup.actionLabel || 'Xem cấu hình',
+                persist: true
+            });
+        }
+
+        const addQuoteLineBtn = document.getElementById('addQuoteLineBtn');
+        if (addQuoteLineBtn) {
+            addQuoteLineBtn.addEventListener('click', addQuoteLine);
+        }
+        resetQuoteLines();
+        initReceiverAccounts();
+
+        function removeLegacyDownloadButtonsInActionColumn() {
+            const legacyLinks = document.querySelectorAll('td a[href*="BillController?action=downloadBill&bill_id="]');
+            legacyLinks.forEach(function(link) {
+                const parentCell = link.closest('td');
+                const row = link.closest('tr');
+                if (!parentCell || !row) return;
+                const actionCell = row.querySelector('td:last-child');
+                if (actionCell === parentCell) {
+                    link.remove();
+                }
+            });
+        }
+
+        removeLegacyDownloadButtonsInActionColumn();
+ 
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Escape') {
                 if (qrModal && !qrModal.classList.contains('hidden')) {
@@ -1109,8 +2153,14 @@
                 if (deleteBillModal && !deleteBillModal.classList.contains('hidden')) {
                     closeDeleteBillModal();
                 }
+                if (quickCustomerModal && !quickCustomerModal.classList.contains('hidden')) {
+                    closeQuickCustomerModal();
+                }
                 if (addModal && !addModal.classList.contains('hidden')) {
                     closeAddModal();
+                }
+                if (invoiceModal && !invoiceModal.classList.contains('hidden')) {
+                    closeInvoiceModal();
                 }
             }
         });

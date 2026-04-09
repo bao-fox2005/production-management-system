@@ -2,7 +2,6 @@ package pms.controllers;
 
 import java.io.IOException;
 import java.util.Properties;
-import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -11,6 +10,7 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import pms.model.UserDTO;
 import pms.utils.EmailService;
+import pms.utils.SystemConfigService;
 
 /**
  * AdminController – Servlet quản lý cấu hình hệ thống dành riêng cho Admin.
@@ -48,23 +48,16 @@ public class AdminController extends HttpServlet {
             action = "";
         }
 
-        // Lấy ServletContext (phạm vi toàn ứng dụng) để đọc/lưu cấu hình SMTP
-        ServletContext app = getServletContext();
-
-        // Kiểm tra xem cấu hình SMTP đã được cache trong ServletContext chưa
-        Properties smtpConfig = (Properties) app.getAttribute("smtpConfig");
-        if (smtpConfig == null) {
-            // Chưa có → tải từ web.xml context-param và cache lại để dùng cho lần sau
-            smtpConfig = loadSmtpConfig(app);
-            app.setAttribute("smtpConfig", smtpConfig);
-        }
+        // Đọc cấu hình SMTP từ SystemConfig (DB)
+        SystemConfigService configService = new SystemConfigService();
+        Properties smtpConfig = loadSmtpConfig(configService);
 
         // Phân luồng theo action
         switch (action) {
             case "saveSmtpConfig":
-                // Lưu cấu hình SMTP mới từ form vào ServletContext
-                saveSmtpConfig(request, app, smtpConfig);
-                request.setAttribute("msg", "Cau hinh email da duoc luu thanh cong!");
+                // Lưu cấu hình SMTP mới vào SystemConfig
+                saveSmtpConfig(request, configService, smtpConfig);
+                request.setAttribute("msg", "Cấu hình email đã được lưu thành công!");
                 break;
 
             case "sendTestEmail":
@@ -79,6 +72,9 @@ public class AdminController extends HttpServlet {
         }
 
         // Forward đến trang cài đặt email
+        request.setAttribute("activePage", "smtp");
+        request.setAttribute("pageTitle", "Cấu hình SMTP");
+        request.setAttribute("smtpConfig", smtpConfig);
         request.getRequestDispatcher("email-settings.jsp").forward(request, response);
     }
 
@@ -90,28 +86,14 @@ public class AdminController extends HttpServlet {
      * @param app ServletContext của ứng dụng, chứa các init-param từ web.xml
      * @return Properties chứa toàn bộ cấu hình SMTP
      */
-    private Properties loadSmtpConfig(ServletContext app) {
+    private Properties loadSmtpConfig(SystemConfigService configService) {
         Properties props = new Properties();
 
-        // Đọc smtp.host từ web.xml; mặc định là chuỗi rỗng nếu chưa khai báo
-        props.setProperty("smtp.host",
-                app.getInitParameter("smtp.host") != null ? app.getInitParameter("smtp.host") : "");
-
-        // Đọc smtp.port; mặc định 587 (port TLS phổ biến của Gmail/Outlook)
-        props.setProperty("smtp.port",
-                app.getInitParameter("smtp.port") != null ? app.getInitParameter("smtp.port") : "587");
-
-        // Đọc tài khoản email gửi (smtp.user)
-        props.setProperty("smtp.user",
-                app.getInitParameter("smtp.user") != null ? app.getInitParameter("smtp.user") : "");
-
-        // Đọc mật khẩu ứng dụng (App Password) của tài khoản gửi
-        props.setProperty("smtp.password",
-                app.getInitParameter("smtp.password") != null ? app.getInitParameter("smtp.password") : "");
-
-        // Đọc email admin nhận thông báo hệ thống
-        props.setProperty("admin.email",
-                app.getInitParameter("admin.email") != null ? app.getInitParameter("admin.email") : "");
+        props.setProperty("smtp.host", configService.getConfig("SMTP_HOST", ""));
+        props.setProperty("smtp.port", configService.getConfig("SMTP_PORT", "587"));
+        props.setProperty("smtp.user", configService.getConfig("SMTP_USER", ""));
+        props.setProperty("smtp.password", configService.getConfig("SMTP_PASSWORD", ""));
+        props.setProperty("admin.email", configService.getConfig("ADMIN_EMAIL", ""));
 
         return props;
     }
@@ -121,10 +103,10 @@ public class AdminController extends HttpServlet {
      * Chỉ cập nhật các trường không null; mật khẩu chỉ cập nhật nếu người dùng nhập mới.
      *
      * @param request    HttpServletRequest chứa các trường từ form cài đặt SMTP
-     * @param app        ServletContext để lưu lại cấu hình vào phạm vi ứng dụng
+     * @param configService SystemConfigService để lưu vào database
      * @param smtpConfig Properties hiện tại cần được cập nhật
      */
-    private void saveSmtpConfig(HttpServletRequest request, ServletContext app, Properties smtpConfig) {
+    private void saveSmtpConfig(HttpServletRequest request, SystemConfigService configService, Properties smtpConfig) {
         // Lấy từng trường từ form submit
         String smtpHost     = request.getParameter("smtp_host");
         String smtpPort     = request.getParameter("smtp_port");
@@ -133,19 +115,33 @@ public class AdminController extends HttpServlet {
         String adminEmail   = request.getParameter("admin_email");
 
         // Cập nhật từng thuộc tính vào Properties; trim() để loại khoảng trắng thừa
-        if (smtpHost != null) smtpConfig.setProperty("smtp.host", smtpHost.trim());
-        if (smtpPort != null) smtpConfig.setProperty("smtp.port", smtpPort.trim());
-        if (smtpUser != null) smtpConfig.setProperty("smtp.user", smtpUser.trim());
+        if (smtpHost != null) {
+            String value = smtpHost.trim();
+            smtpConfig.setProperty("smtp.host", value);
+            configService.setConfig("SMTP_HOST", value);
+        }
+        if (smtpPort != null) {
+            String value = smtpPort.trim();
+            smtpConfig.setProperty("smtp.port", value);
+            configService.setConfig("SMTP_PORT", value);
+        }
+        if (smtpUser != null) {
+            String value = smtpUser.trim();
+            smtpConfig.setProperty("smtp.user", value);
+            configService.setConfig("SMTP_USER", value);
+        }
 
         // Mật khẩu chỉ cập nhật nếu người dùng nhập giá trị mới (tránh xóa mật khẩu cũ)
         if (smtpPassword != null && !smtpPassword.isEmpty()) {
             smtpConfig.setProperty("smtp.password", smtpPassword);
+            configService.setConfig("SMTP_PASSWORD", smtpPassword);
         }
 
-        if (adminEmail != null) smtpConfig.setProperty("admin.email", adminEmail.trim());
-
-        // Lưu lại vào ServletContext để các request khác dùng được
-        app.setAttribute("smtpConfig", smtpConfig);
+        if (adminEmail != null) {
+            String value = adminEmail.trim();
+            smtpConfig.setProperty("admin.email", value);
+            configService.setConfig("ADMIN_EMAIL", value);
+        }
 
         // In log ra console server để debug
         System.out.println("SMTP Config saved: host=" + smtpConfig.getProperty("smtp.host")
@@ -174,19 +170,14 @@ public class AdminController extends HttpServlet {
             // Lấy địa chỉ email đích cần gửi thử
             String testEmail = request.getParameter("test_email");
 
-            // Lấy cấu hình SMTP đang được cache trong ServletContext
-            ServletContext app = getServletContext();
-            Properties smtpConfig = (Properties) app.getAttribute("smtpConfig");
-            if (smtpConfig == null) {
-                // Nếu chưa cache thì tải và lưu lại
-                smtpConfig = loadSmtpConfig(app);
-                app.setAttribute("smtpConfig", smtpConfig);
-            }
+            // Lấy cấu hình SMTP từ SystemConfig
+            SystemConfigService configService = new SystemConfigService();
+            Properties smtpConfig = loadSmtpConfig(configService);
 
             // Validate email đích: không null, không rỗng, phải có dấu "@"
             if (testEmail == null || testEmail.trim().isEmpty() || !testEmail.contains("@")) {
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST); // HTTP 400
-                response.getWriter().write("Email khong hop le!");
+                response.getWriter().write("Email không hợp lệ!");
                 return;
             }
 
@@ -213,23 +204,23 @@ public class AdminController extends HttpServlet {
             if (!emailService.isConfigured() || smtpPassword == null || smtpPassword.trim().isEmpty()) {
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST); // HTTP 400
                 response.getWriter().write(
-                    "SMTP chua du thong tin. Can nhap day du host, port, email gui va app password.");
+                    "SMTP chưa đủ thông tin. Cần nhập đầy đủ host, port, email gửi và app password.");
                 return;
             }
 
             // Xây dựng nội dung email thử và gửi đi
-            String subject = "[PMS] Email Test - He Thong San Xuat";
+            String subject = "[PMS] Email Test - Hệ Thống Sản Xuất";
             String body    = buildTestEmailBody(); // Tạo nội dung HTML đẹp
             boolean success = emailService.sendEmail(testEmail.trim(), subject, body);
 
             if (success) {
-                response.getWriter().write("Email test da duoc gui thanh cong!");
+                response.getWriter().write("Email test đã được gửi thành công!");
             } else {
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST); // HTTP 400
                 // Lấy message lỗi cụ thể từ EmailService (ví dụ: authentication failed)
                 String smtpError = emailService.getLastError();
                 if (smtpError == null || smtpError.trim().isEmpty()) {
-                    smtpError = "Gui email that bai. Kiem tra lai smtp host, port, email gui va app password Gmail.";
+                    smtpError = "Gửi email thất bại. Kiểm tra lại smtp host, port, email gửi và app password Gmail.";
                 }
                 response.getWriter().write(smtpError);
             }
@@ -290,21 +281,21 @@ public class AdminController extends HttpServlet {
 
         // Vùng nội dung chính
         sb.append("<div style=\"padding:32px;max-width:600px;margin:0 auto;background:#fff;\">");
-        sb.append("<p>Xin chao,</p>");
-        sb.append("<p>Day la email test tu <strong>Production Management System</strong>.</p>");
-        sb.append("<p>Neu ban nhan duoc email nay, cau hinh SMTP da hoat dong binh thuong!</p>");
+        sb.append("<p>Xin chào,</p>");
+        sb.append("<p>Đây là email test từ <strong>Production Management System</strong>.</p>");
+        sb.append("<p>Nếu bạn nhận được email này, cấu hình SMTP đã hoạt động bình thường!</p>");
 
         // Hộp hiển thị kết quả OK màu xanh lá
         sb.append("<div style=\"background:#f0fdf4;border-radius:12px;padding:20px;margin:24px 0;text-align:center;\">");
         sb.append("<p style=\"margin:0;font-size:2rem;\">&#9989;</p>"); // Icon dấu tích xanh ✅
-        sb.append("<p style=\"margin:8px 0 0;color:#059669;font-weight:bold;\">Email Config OK!</p>");
+        sb.append("<p style=\"margin:8px 0 0;color:#059669;font-weight:bold;\">Cấu hình email hoạt động tốt!</p>");
         sb.append("</div>");
 
         // Đường kẻ phân cách
         sb.append("<hr style=\"border:none;border-top:1px solid #e5e7eb;margin:24px 0;\">");
 
         // Footer
-        sb.append("<p style=\"color:#6b7280;font-size:12px;text-align:center;\">He thong tu dong - Production Management System</p>");
+        sb.append("<p style=\"color:#6b7280;font-size:12px;text-align:center;\">Hệ thống tự động - Production Management System</p>");
         sb.append("</div></body></html>");
 
         return sb.toString();

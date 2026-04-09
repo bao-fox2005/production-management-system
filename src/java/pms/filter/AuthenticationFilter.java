@@ -39,7 +39,8 @@ public class AuthenticationFilter implements Filter {
             user = (UserDTO) session.getAttribute("user");
         }
 
-        boolean isPublicResource = isPublicPath(path);
+        boolean isPublicResource = isPublicPath(path)
+                || isPublicInvoiceRequest(path, httpRequest);
         boolean isLoginAction = requestURI.contains("MainController")
                 && "loginUser".equals(httpRequest.getParameter("action"));
 
@@ -126,7 +127,6 @@ public class AuthenticationFilter implements Filter {
         if ("/DashboardController".equals(path)
                 || "/WorkOrderController".equals(path)
                 || "/ProductionLogController".equals(path)
-                || "/ProductionTrackingController".equals(path)
                 || "/QcController".equals(path)
                 || "/KanbanController".equals(path)
                 || "/PurchaseOrderController".equals(path)
@@ -145,6 +145,17 @@ public class AuthenticationFilter implements Filter {
         }
 
         return false;
+    }
+
+    private boolean isPublicInvoiceRequest(String path, HttpServletRequest request) {
+        if (path == null || request == null) {
+            return false;
+        }
+        if (!"/BillController".equals(path)) {
+            return false;
+        }
+        String action = request.getParameter("action");
+        return "viewPublicBill".equals(action) || "downloadPublicBill".equals(action);
     }
 
     @Override

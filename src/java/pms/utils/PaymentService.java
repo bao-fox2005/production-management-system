@@ -4,12 +4,17 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import pms.model.BillDAO;
+import pms.model.BillDTO;
+import pms.model.CustomerDAO;
+import pms.model.CustomerDTO;
 import pms.model.PaymentDAO;
 import pms.model.PaymentDTO;
 
 public class PaymentService {
 
-    private static final int MAX_QR_EXPIRE_MINUTES = 60;
+    private static final int DEFAULT_QR_EXPIRE_MINUTES = 1440; // 24h
+    private static final int MAX_QR_EXPIRE_MINUTES = 1440;     // hard cap 24h
 
     private final PaymentDAO paymentDAO;
     private final QrCodeGenerator qrGenerator;
@@ -48,6 +53,13 @@ public class PaymentService {
 
     public PaymentDTO createQrPayment(int billId, double amount, int expireMinutes,
             String customerName, String customerEmail) {
+        return createQrPayment(billId, amount, expireMinutes, customerName, customerEmail,
+                null, null, null);
+    }
+
+    public PaymentDTO createQrPayment(int billId, double amount, int expireMinutes,
+            String customerName, String customerEmail,
+            String bankBin, String bankAccount, String bankAccountName) {
 
         if (amount <= 0) {
             throw new IllegalArgumentException("So tien thanh toan phai lon hon 0.");
@@ -59,12 +71,19 @@ public class PaymentService {
         if (expireMinutes <= 0) {
             expireMinutes = configService.getQrExpireMinutes();
         }
+        if (expireMinutes <= 0) {
+            expireMinutes = DEFAULT_QR_EXPIRE_MINUTES;
+        }
         if (expireMinutes > MAX_QR_EXPIRE_MINUTES) {
             expireMinutes = MAX_QR_EXPIRE_MINUTES;
         }
-        if (expireMinutes <= 0) {
-            expireMinutes = 15;
+        if (expireMinutes < DEFAULT_QR_EXPIRE_MINUTES) {
+            expireMinutes = DEFAULT_QR_EXPIRE_MINUTES;
         }
+
+        String bankBinToUse = getConfigOrDefault(bankBin, defaultBankBin);
+        String bankAccountToUse = getConfigOrDefault(bankAccount, defaultBankAccount);
+        String bankAccountNameToUse = getConfigOrDefault(bankAccountName, defaultBankAccountName);
 
         String billCode = "HD" + String.format("%06d", billId);
         String transactionId = generateTransactionId(billId);
@@ -75,23 +94,26 @@ public class PaymentService {
         String qrBase64 = null;
         String qrVietQrUrl = null;
         try {
-            qrBase64 = qrGenerator.generateQrCodeBase64(
-                    qrGenerator.generatePaymentQrRaw(
-                            defaultBankBin,
-                            defaultBankAccount,
-                            defaultBankAccountName,
-                            amount,
-                            billCode
-                    ),
-                    300
-            );
             qrVietQrUrl = qrGenerator.generateVietQrUrl(
-                    defaultBankBin,
-                    defaultBankAccount,
-                    defaultBankAccountName,
+                    bankBinToUse,
+                    bankAccountToUse,
+                    bankAccountNameToUse,
                     amount,
                     billCode
             );
+            try {
+                qrBase64 = qrGenerator.imageUrlToBase64(qrVietQrUrl);
+            } catch (Exception externalQrError) {
+                System.err.println("Khong lay duoc anh QR tu VietQR, chuyen sang tao QR noi bo: " + externalQrError.getMessage());
+                String qrRaw = qrGenerator.generatePaymentQrRaw(
+                        bankBinToUse,
+                        bankAccountToUse,
+                        bankAccountNameToUse,
+                        amount,
+                        billCode
+                );
+                qrBase64 = qrGenerator.generateQrCodeBase64(qrRaw);
+            }
         } catch (Exception e) {
             System.err.println("Loi tao QR: " + e.getMessage());
             throw new RuntimeException("Loi tao ma QR: " + e.getMessage(), e);
@@ -108,9 +130,9 @@ public class PaymentService {
         payment.setQrCodeData(fullQrData);
         payment.setCreatedAt(now);
         payment.setExpiresAt(expires);
-        payment.setBankBin(defaultBankBin);
-        payment.setBankAccount(defaultBankAccount);
-        payment.setBankAccountName(defaultBankAccountName);
+        payment.setBankBin(bankBinToUse);
+        payment.setBankAccount(bankAccountToUse);
+        payment.setBankAccountName(bankAccountNameToUse);
         payment.setCustomerName(customerName);
         payment.setCustomerEmail(customerEmail);
 
@@ -132,11 +154,14 @@ public class PaymentService {
         if (expireMinutes <= 0) {
             expireMinutes = configService.getQrExpireMinutes();
         }
+        if (expireMinutes <= 0) {
+            expireMinutes = DEFAULT_QR_EXPIRE_MINUTES;
+        }
         if (expireMinutes > MAX_QR_EXPIRE_MINUTES) {
             expireMinutes = MAX_QR_EXPIRE_MINUTES;
         }
-        if (expireMinutes <= 0) {
-            expireMinutes = 15;
+        if (expireMinutes < DEFAULT_QR_EXPIRE_MINUTES) {
+            expireMinutes = DEFAULT_QR_EXPIRE_MINUTES;
         }
 
         PaymentDTO payment = paymentDAO.getPaymentById(paymentId);
@@ -159,17 +184,23 @@ public class PaymentService {
         String qrBase64 = null;
         String qrVietQrUrl = null;
         try {
-            qrBase64 = qrGenerator.generateQrCodeBase64(
-                    qrGenerator.generatePaymentQrRaw(
-                            bankBin, bankAccount, bankAccountName,
-                            payment.getAmount(), billCode
-                    ),
-                    300
-            );
             qrVietQrUrl = qrGenerator.generateVietQrUrl(
                     bankBin, bankAccount, bankAccountName,
                     payment.getAmount(), billCode
             );
+            try {
+                qrBase64 = qrGenerator.imageUrlToBase64(qrVietQrUrl);
+            } catch (Exception externalQrError) {
+                System.err.println("Khong lay duoc anh QR tu VietQR khi refresh, chuyen sang tao QR noi bo: " + externalQrError.getMessage());
+                String qrRaw = qrGenerator.generatePaymentQrRaw(
+                        bankBin,
+                        bankAccount,
+                        bankAccountName,
+                        payment.getAmount(),
+                        billCode
+                );
+                qrBase64 = qrGenerator.generateQrCodeBase64(qrRaw);
+            }
         } catch (Exception e) {
             System.err.println("Loi tao QR khi refresh: " + e.getMessage());
             return false;
@@ -315,12 +346,40 @@ public class PaymentService {
                 System.out.println("Email admin chua duoc cau hinh, bo qua gui email.");
                 return;
             }
+
+            String billCode = "HD" + String.format("%06d", payment.getBillId());
+            String customerName = payment.getCustomerName();
+            BillDTO bill = null;
+
+            if (payment.getBillId() > 0) {
+                bill = new BillDAO().SearchByBillID(String.valueOf(payment.getBillId()));
+                if (bill != null && bill.getCustomer_id() > 0) {
+                    CustomerDTO customer = new CustomerDAO().SearchByCustomerID(String.valueOf(bill.getCustomer_id()));
+                    if (customer != null && customer.getCustomer_name() != null && !customer.getCustomer_name().trim().isEmpty()) {
+                        customerName = customer.getCustomer_name().trim();
+                    }
+                }
+            }
+
+            if (customerName == null || customerName.trim().isEmpty()) {
+                customerName = "Quý khách";
+            }
+
+            String baseUrl = configService.getConfig("APP_BASE_URL", "http://localhost:8080/production-management-system").trim();
+            if (baseUrl.endsWith("/")) {
+                baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+            }
+            String viewLink = baseUrl + "/BillController?action=viewPublicBill&bill_id=" + payment.getBillId();
+            String downloadLink = baseUrl + "/BillController?action=downloadPublicBill&bill_id=" + payment.getBillId();
+
             emailService.sendBillPaymentSuccess(
                     adminEmail,
-                    "HD" + String.format("%06d", payment.getBillId()),
-                    payment.getCustomerName() != null ? payment.getCustomerName() : "Khach hang",
+                    billCode,
+                    customerName,
                     payment.getAmount(),
-                    transactionId
+                    transactionId,
+                    viewLink,
+                    downloadLink
             );
         } catch (Exception e) {
             System.err.println("Loi gui email thong bao thanh toan: " + e.getMessage());
@@ -331,7 +390,6 @@ public class PaymentService {
     public String getDefaultBankAccount() { return defaultBankAccount; }
     public String getDefaultBankAccountName() { return defaultBankAccountName; }
     public int getDefaultExpireMinutes() {
-        int minutes = configService.getQrExpireMinutes();
-        return minutes > 0 ? minutes : 15;
+        return DEFAULT_QR_EXPIRE_MINUTES;
     }
 }

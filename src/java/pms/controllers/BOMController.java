@@ -161,15 +161,7 @@ public class BOMController extends HttpServlet {
      * @return URL trang danh sách BOM
      */
     private String listBOMs(HttpServletRequest request) {
-        loadBomListData(request); // Nạp danh sách BOM + products + materials vào request
-        // Đọc flash message từ session (sau redirect)
-        HttpSession session = request.getSession(false);
-        if (session != null) {
-            String flashMsg   = (String) session.getAttribute("flashMsg");
-            String flashError = (String) session.getAttribute("flashError");
-            if (flashMsg   != null) { request.setAttribute(ATTR_MSG,   flashMsg);   session.removeAttribute("flashMsg"); }
-            if (flashError != null) { request.setAttribute(ATTR_ERROR, flashError); session.removeAttribute("flashError"); }
-        }
+        loadBomListData(request); // Nạp danh sách BOM + dropdown tham chiếu vào request
         return "bom-list.jsp";
     }
 
@@ -349,7 +341,6 @@ public class BOMController extends HttpServlet {
                         throw new IllegalStateException("Không thể lưu nguyên liệu cho BOM");
                     }
                 }
-                request.getSession().setAttribute("flashMsg", "Tạo BOM mới thành công!");
                 return REDIRECT_LIST; // Thành công → redirect để tránh submit lại khi F5
             } else {
                 error = "Không thể tạo BOM mới – vui lòng thử lại";
@@ -357,11 +348,27 @@ public class BOMController extends HttpServlet {
 
         } catch (Exception e) {
             error = "Lỗi: " + e.getMessage();
+
+            // Cố khôi phục dữ liệu form để người dùng không phải nhập lại
+            try {
+                bom.setProductItemId(Integer.parseInt(request.getParameter("productItemId")));
+            } catch (NumberFormatException ignore) {
+                // productItemId không hợp lệ; giữ giá trị mặc định 0
+            }
+            bom.setNotes(request.getParameter("notes"));
+            try {
+                bom.setDetails(extractDetails(request)); // Cố giữ lại dữ liệu chi tiết người dùng đã nhập
+            } catch (Exception ignore) {
+                bom.setDetails(new ArrayList<>()); // Parse lỗi → để rỗng
+            }
         }
 
-        // Thất bại → flash error, redirect về danh sách (modal sẽ không auto-open, user thấy thông báo)
-        request.getSession().setAttribute("flashError", error);
-        return REDIRECT_LIST;
+        // Thất bại → trả về form với dữ liệu cũ và thông báo lỗi
+        loadBomReferenceData(request);
+        request.setAttribute(ATTR_BOM, bom);
+        request.setAttribute(ATTR_ERROR, error);
+        request.setAttribute("mode", "add");
+        return "bom-form.jsp";
     }
 
     // ---------------------------------------------------------------------------
@@ -584,7 +591,6 @@ public class BOMController extends HttpServlet {
                         throw new IllegalStateException("Không thể cập nhật nguyên liệu cho BOM");
                     }
                 }
-                request.getSession().setAttribute("flashMsg", "Cập nhật BOM thành công!");
                 return REDIRECT_LIST; // Thành công → redirect để ngăn F5 submit lại
             } else {
                 error = "Không thể cập nhật BOM – vui lòng thử lại";
@@ -594,9 +600,26 @@ public class BOMController extends HttpServlet {
             error = "Lỗi: " + e.getMessage();
         }
 
-        // Thất bại → flash error, redirect về danh sách
-        request.getSession().setAttribute("flashError", error);
-        return REDIRECT_LIST;
+        // Lấy lại dữ liệu BOM từ DB để tái điền vào form khi có lỗi
+        BOMDAO dao = new BOMDAO();
+        BOMDTO bom = dao.getBOMById(id); // id đã parse an toàn ở trên
+        if (bom != null) {
+            try {
+                bom.setProductItemId(Integer.parseInt(request.getParameter("productItemId")));
+            } catch (NumberFormatException ignore) {}
+            bom.setNotes(request.getParameter("notes"));
+            try {
+                bom.setDetails(extractDetails(request)); // Khôi phục chi tiết người dùng đã nhập
+            } catch (Exception ignore) {
+                bom.setDetails(new ArrayList<>()); // Parse lỗi → để rỗng
+            }
+        }
+
+        loadBomReferenceData(request);
+        request.setAttribute(ATTR_BOM, bom);
+        request.setAttribute(ATTR_ERROR, error);
+        request.setAttribute("mode", "update");
+        return "bom-form.jsp";
     }
 
     // ---------------------------------------------------------------------------
@@ -606,12 +629,11 @@ public class BOMController extends HttpServlet {
     /**
      * Nạp toàn bộ danh sách BOM và dữ liệu tham chiếu (products, materials) vào request.
      * Dùng bởi listBOMs() và bất kỳ nơi nào cần hiển thị danh sách đầy đủ.
-     * Cũng nạp products + materials để Modal Add/Edit hoạt động đúng.
      */
     private void loadBomListData(HttpServletRequest request) {
         BOMDAO dao = new BOMDAO();
         request.setAttribute("boms", dao.getAllBOMS()); // Tất cả BOM từ DB
-        loadBomReferenceData(request); // Nạp products + materials cho Modal và bộ lọc
+        loadBomReferenceData(request);                  // Dropdown products/materials cho bộ lọc
     }
 
     // ---------------------------------------------------------------------------

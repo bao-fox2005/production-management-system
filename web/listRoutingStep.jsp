@@ -1,7 +1,7 @@
 <%@page import="pms.model.RoutingStepDTO"%>
 <%@page import="java.util.List"%>
 <%@page import="pms.model.UserDTO"%>
-<%@page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%
     List<RoutingStepDTO> listStep = (List<RoutingStepDTO>) request.getAttribute("listStep");
     RoutingStepDTO stepEdit = (RoutingStepDTO) request.getAttribute("stepEdit");
@@ -269,10 +269,7 @@
                                 </tr>
                                 <% } else { %>
                                     <% for (RoutingStepDTO s : listStep) { %>
-                                    <tr class="border-b border-slate-50 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
-                                        data-step-row="true"
-                                        data-estimated-time="<%= s.getEstimatedTime() %>"
-                                        data-is-inspected="<%= s.isIsInspected() %>">
+                                    <tr class="border-b border-slate-50 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
                                         <td class="px-4 py-3">
                                             <span class="font-bold text-teal-600 dark:text-teal-300">#CD-<%= s.getStepId() %></span>
                                         </td>
@@ -338,53 +335,7 @@
                     </div>
                     <% } %>
                 </div>
-
-                <!-- ===================================================
-                     Task 3: Thanh tổng thời gian Real-time
-                     =================================================== -->
-                <div id="routingSummaryBar"
-                     class="mt-4 flex flex-wrap items-center gap-4 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50 px-6 py-4 shadow-sm dark:border-teal-500/30 dark:from-teal-900/20 dark:to-cyan-900/20">
-                    <!-- Icon -->
-                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-500/20 dark:text-teal-300 flex-shrink-0">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                    </div>
-                    <!-- Label -->
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-300">Tổng thời gian quy trình</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Cập nhật ngay khi thêm, sửa, xóa công đoạn</p>
-                    </div>
-                    <!-- Stats -->
-                    <div class="flex flex-wrap gap-6 ml-auto">
-                        <div class="text-center">
-                            <p class="text-2xl font-bold text-slate-800 dark:text-slate-100" id="summaryTotalSteps"><%= listStep.size() %></p>
-                            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Công đoạn</p>
-                        </div>
-                        <div class="w-px bg-slate-200 dark:bg-slate-700 self-stretch"></div>
-                        <div class="text-center">
-                            <p class="text-2xl font-bold text-teal-600 dark:text-teal-300" id="summaryTotalMinutes">
-                                <%
-                                    int totalMinutes = 0;
-                                    for (RoutingStepDTO s2 : listStep) totalMinutes += s2.getEstimatedTime();
-                                %><%= totalMinutes %>
-                            </p>
-                            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Phút</p>
-                        </div>
-                        <div class="w-px bg-slate-200 dark:bg-slate-700 self-stretch"></div>
-                        <div class="text-center">
-                            <p class="text-2xl font-bold text-indigo-600 dark:text-indigo-300" id="summaryTotalHours">
-                                <%= String.format("%.1f", totalMinutes / 60.0) %>
-                            </p>
-                            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Giờ</p>
-                        </div>
-                        <div class="w-px bg-slate-200 dark:bg-slate-700 self-stretch"></div>
-                        <div class="text-center">
-                            <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-300" id="summaryQcCount"><%= qcCount %></p>
-                            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Có QC</p>
-                        </div>
-                    </div>
-                </div>
+            </main>
         </div>
     </div>
 
@@ -507,43 +458,6 @@
                 modal.getAttribute('data-is-inspected')
             );
         })();
-
-        // ================================================================
-        // Task 3: Tính tổng thời gian real-time từ data-* của các dòng
-        // ================================================================
-        function recalculateSummary() {
-            var rows = document.querySelectorAll('tr[data-step-row="true"]');
-            var times = Array.prototype.slice.call(rows);
-
-            var totalMinutes = times.reduce(function(acc, row) {
-                return acc + (parseInt(row.getAttribute('data-estimated-time'), 10) || 0);
-            }, 0);
-
-            var qcCount = times.reduce(function(acc, row) {
-                return acc + (row.getAttribute('data-is-inspected') === 'true' ? 1 : 0);
-            }, 0);
-
-            var totalSteps = rows.length;
-            var totalHours = totalMinutes > 0 ? (totalMinutes / 60).toFixed(1) : '0.0';
-
-            var elSteps   = document.getElementById('summaryTotalSteps');
-            var elMinutes = document.getElementById('summaryTotalMinutes');
-            var elHours   = document.getElementById('summaryTotalHours');
-            var elQc      = document.getElementById('summaryQcCount');
-
-            if (elSteps)   elSteps.textContent   = totalSteps;
-            if (elMinutes) elMinutes.textContent  = totalMinutes;
-            if (elHours)   elHours.textContent    = totalHours;
-            if (elQc)      elQc.textContent       = qcCount;
-        }
-
-        // Gắn recalculate vào submit của từng modal (form submit → page reload, nhưng
-        // cũng gọi ngay lúc đầu để đồng bộ với DOM hiện tại)
-        recalculateSummary();
-
-        // Nếu form Add/Edit/Delete có AJAX trong tương lai, gọi recalculateSummary()
-        // sau khi DOM thay đổi. Hiện tại form submit reload trang → summary được
-        // server render lại với giá trị đúng. JavaScript lúc này là safety net.
     </script>
 
     <!-- Modal thêm công đoạn -->

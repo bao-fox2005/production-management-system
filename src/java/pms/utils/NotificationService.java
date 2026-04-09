@@ -185,6 +185,14 @@ public class NotificationService implements Serializable {
                 "payment-list.jsp"));
     }
 
+    public static void notifyPaymentCompletedGlobal(int paymentId, double amount) {
+        pushToAll(new Notification(
+                TYPE_PAYMENT,
+                "Có đơn vị thanh toán hoàn tất",
+                "Thanh toán #" + paymentId + " - " + String.format("%,.0f", amount) + " VND đã hoàn tất.",
+                "MainController?action=listBill"));
+    }
+
     public static void notifyLowStock(String itemName, int currentStock) {
         pushToAll(new Notification(
                 TYPE_INVENTORY,
@@ -198,7 +206,7 @@ public class NotificationService implements Serializable {
                 TYPE_DEFECT,
                 "Phát hiện lỗi QC",
                 "WO#" + safeText(woId) + " có kết quả QC không đạt: " + safeText(defectReason) + ".",
-                "ProductionTrackingController?action=list&tab=qc"
+                "QcController?action=list"
         );
         pushToAdmins(notification);
         sendDefectEmailToAdmins(woId, defectReason);

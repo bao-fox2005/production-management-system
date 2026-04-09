@@ -116,29 +116,30 @@ public class EmailService implements Serializable {
     }
 
     public boolean sendBillPaymentSuccess(String adminEmail, String billCode,
-            String customerName, double amount, String transactionId) {
-        String subject = "[PMS] Xac nhan thanh toan - Hoa don #" + billCode;
-        String body = buildPaymentSuccessEmail(billCode, customerName, amount, transactionId);
+            String customerName, double amount, String transactionId,
+            String viewLink, String downloadLink) {
+        String subject = "[PMS] Xác nhận thanh toán - Hóa đơn #" + billCode;
+        String body = buildPaymentSuccessEmail(billCode, customerName, amount, transactionId, viewLink, downloadLink);
         return sendEmail(adminEmail, subject, body);
     }
 
     public boolean sendOrderCompletionNotification(String adminEmail, String orderCode,
             String customerName, double amount, String employeeName) {
-        String subject = "[PMS] Don hang hoan thanh - " + orderCode;
+        String subject = "[PMS] Đơn hàng hoàn thành - " + orderCode;
         String body = buildOrderCompletionEmail(orderCode, customerName, amount, employeeName);
         return sendEmail(adminEmail, subject, body);
     }
 
     public boolean sendWorkOrderCompleted(String adminEmail, int woId, String productName,
             int quantity, String employeeName) {
-        String subject = "[PMS] Lenh san xuat hoan thanh - WO#" + woId;
+        String subject = "[PMS] Lệnh sản xuất hoàn thành - WO#" + woId;
         String body = buildWorkOrderCompletedEmail(woId, productName, quantity, employeeName);
         return sendEmail(adminEmail, subject, body);
     }
 
     public boolean sendNewBillNotification(String adminEmail, String billCode,
             String customerName, double amount) {
-        String subject = "[PMS] Hoa don moi - #" + billCode;
+        String subject = "[PMS] Hóa đơn mới - #" + billCode;
         String body = buildNewBillEmail(billCode, customerName, amount);
         return sendEmail(adminEmail, subject, body);
     }
@@ -474,20 +475,20 @@ public class EmailService implements Serializable {
         sb.append("<head><meta charset=\"UTF-8\"></head>\n");
         sb.append("<body style=\"margin:0;padding:0;font-family:Arial,sans-serif;\">\n");
         sb.append("<div style=\"background:#2563eb;padding:24px;text-align:center;\">\n");
-        sb.append("<h1 style=\"color:white;margin:0;font-size:1.5rem;\">Don Hang Hoan Thanh</h1>\n");
+        sb.append("<h1 style=\"color:white;margin:0;font-size:1.5rem;\">Đơn Hàng Hoàn Thành</h1>\n");
         sb.append("</div>\n");
         sb.append("<div style=\"padding:24px;max-width:600px;margin:0 auto;background:#fff;\">\n");
-        sb.append("<p>Xin chao Admin,</p>\n");
-        sb.append("<p>Mot don hang da duoc hoan thanh va san sang giao hang.</p>\n");
+        sb.append("<p>Xin chào Admin,</p>\n");
+        sb.append("<p>Một đơn hàng đã được hoàn thành và sẵn sàng giao hàng.</p>\n");
         sb.append("<table style=\"width:100%;border-collapse:collapse;margin:20px 0;\">\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Ma don hang</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(orderCode).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Khach hang</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(cust).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Tong gia tri</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;color:#2563eb;font-weight:bold;\">").append(formattedAmount).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Nhan vien thuc hien</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(emp).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Mã đơn hàng</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(orderCode).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Khách hàng</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(cust).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Tổng giá trị</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;color:#2563eb;font-weight:bold;\">").append(formattedAmount).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Nhân viên thực hiện</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(emp).append("</td></tr>\n");
         sb.append("</table>\n");
-        sb.append("<p>Vui long kiem tra va xac nhan don hang som nhat.</p>\n");
+        sb.append("<p>Vui lòng kiểm tra và xác nhận đơn hàng sớm nhất.</p>\n");
         sb.append("<hr style=\"border:none;border-top:1px solid #e5e7eb;margin:20px 0;\">\n");
-        sb.append("<p style=\"color:#6b7280;font-size:12px;text-align:center;\">He thong tu dong - Production Management System</p>\n");
+        sb.append("<p style=\"color:#6b7280;font-size:12px;text-align:center;\">Hệ thống tự động - Production Management System</p>\n");
         sb.append("</div>\n");
         sb.append("</body>\n");
         sb.append("</html>");
@@ -495,35 +496,47 @@ public class EmailService implements Serializable {
     }
 
     private String buildPaymentSuccessEmail(String billCode, String customerName,
-            double amount, String transactionId) {
+            double amount, String transactionId, String viewLink, String downloadLink) {
         String cust = customerName != null ? escapeHtml(customerName) : "-";
-        String txn = transactionId != null ? escapeHtml(transactionId) : "Chua co";
+        String txn = transactionId != null && !transactionId.trim().isEmpty() ? escapeHtml(transactionId) : "Chưa có";
         String formattedAmount = String.format("%,.0f VND", amount);
         String now = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date());
+        String safeViewLink = viewLink != null ? viewLink.trim() : "";
+        String safeDownloadLink = downloadLink != null ? downloadLink.trim() : "";
 
         StringBuilder sb = new StringBuilder();
         sb.append("<!DOCTYPE html>\n");
         sb.append("<html>\n");
         sb.append("<head><meta charset=\"UTF-8\"></head>\n");
-        sb.append("<body style=\"margin:0;padding:0;font-family:Arial,sans-serif;\">\n");
+        sb.append("<body style=\"margin:0;padding:0;font-family:Arial,sans-serif;background:#f8fafc;\">\n");
         sb.append("<div style=\"background:#059669;padding:24px;text-align:center;\">\n");
-        sb.append("<h1 style=\"color:white;margin:0;font-size:1.5rem;\">Thanh Toan Thanh Cong</h1>\n");
+        sb.append("<h1 style=\"color:white;margin:0;font-size:1.5rem;\">Thanh Toán Thành Công</h1>\n");
         sb.append("</div>\n");
         sb.append("<div style=\"padding:24px;max-width:600px;margin:0 auto;background:#fff;\">\n");
-        sb.append("<p>Xin chao Admin,</p>\n");
-        sb.append("<p>Mot khoan thanh toan da duoc xac nhan thanh cong trong he thong.</p>\n");
+        sb.append("<p>Xin chào Admin,</p>\n");
+        sb.append("<p>Một khoản thanh toán đã được xác nhận thành công trong hệ thống.</p>\n");
         sb.append("<table style=\"width:100%;border-collapse:collapse;margin:20px 0;\">\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Ma hoa don</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(billCode).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Khach hang</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(cust).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>So tien</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;color:#059669;font-weight:bold;\">").append(formattedAmount).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Ma giao dich</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(txn).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Thoi gian</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(now).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Mã hóa đơn</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(billCode).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Khách hàng</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(cust).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Số tiền</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;color:#059669;font-weight:bold;\">").append(formattedAmount).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Mã giao dịch</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(txn).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Thời gian</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(now).append("</td></tr>\n");
         sb.append("</table>\n");
         sb.append("<div style=\"background:#d1fae5;padding:16px;border-radius:8px;text-align:center;margin:16px 0;\">\n");
-        sb.append("<strong style=\"color:#059669;\">Thanh toan da duoc xac nhan. Vui long cap nhat trang thai don hang.</strong>\n");
+        sb.append("<strong style=\"color:#059669;\">Thanh toán đã được xác nhận. Bạn có thể xem hoặc tải hóa đơn ngay từ email này.</strong>\n");
         sb.append("</div>\n");
+        if (!safeViewLink.isEmpty() || !safeDownloadLink.isEmpty()) {
+            sb.append("<div style=\"margin:20px 0;text-align:center;\">\n");
+            if (!safeViewLink.isEmpty()) {
+                sb.append("<a href=\"").append(safeViewLink).append("\" style=\"display:inline-block;margin:0 8px 8px 0;background:#0f766e;color:#fff;padding:11px 16px;border-radius:8px;text-decoration:none;font-weight:600;\">Xem hóa đơn</a>\n");
+            }
+            if (!safeDownloadLink.isEmpty()) {
+                sb.append("<a href=\"").append(safeDownloadLink).append("\" style=\"display:inline-block;margin:0 0 8px 0;background:#1d4ed8;color:#fff;padding:11px 16px;border-radius:8px;text-decoration:none;font-weight:600;\">Tải hóa đơn</a>\n");
+            }
+            sb.append("</div>\n");
+        }
         sb.append("<hr style=\"border:none;border-top:1px solid #e5e7eb;margin:20px 0;\">\n");
-        sb.append("<p style=\"color:#6b7280;font-size:12px;text-align:center;\">He thong tu dong - Production Management System</p>\n");
+        sb.append("<p style=\"color:#6b7280;font-size:12px;text-align:center;\">Hệ thống tự động - Production Management System</p>\n");
         sb.append("</div>\n");
         sb.append("</body>\n");
         sb.append("</html>");
@@ -542,21 +555,21 @@ public class EmailService implements Serializable {
         sb.append("<head><meta charset=\"UTF-8\"></head>\n");
         sb.append("<body style=\"margin:0;padding:0;font-family:Arial,sans-serif;\">\n");
         sb.append("<div style=\"background:#7c3aed;padding:24px;text-align:center;\">\n");
-        sb.append("<h1 style=\"color:white;margin:0;font-size:1.5rem;\">Lenh San Xuat Hoan Thanh</h1>\n");
+        sb.append("<h1 style=\"color:white;margin:0;font-size:1.5rem;\">Lệnh Sản Xuất Hoàn Thành</h1>\n");
         sb.append("</div>\n");
         sb.append("<div style=\"padding:24px;max-width:600px;margin:0 auto;background:#fff;\">\n");
-        sb.append("<p>Xin chao Admin,</p>\n");
-        sb.append("<p>Mot lenh san xuat da duoc hoan thanh trong he thong.</p>\n");
+        sb.append("<p>Xin chào Admin,</p>\n");
+        sb.append("<p>Một lệnh sản xuất đã được hoàn thành trong hệ thống.</p>\n");
         sb.append("<table style=\"width:100%;border-collapse:collapse;margin:20px 0;\">\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Ma WO</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">WO#").append(woId).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>San pham</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(prod).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>So luong</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(quantity).append(" san pham</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Nhan vien hoan thanh</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(emp).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Thoi gian</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(now).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Mã WO</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">WO#").append(woId).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Sản phẩm</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(prod).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Số lượng</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(quantity).append(" sản phẩm</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Nhân viên hoàn thành</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(emp).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Thời gian</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(now).append("</td></tr>\n");
         sb.append("</table>\n");
-        sb.append("<p>Vui long kiem tra va xu ly buoc tiep theo.</p>\n");
+        sb.append("<p>Vui lòng kiểm tra và xử lý bước tiếp theo.</p>\n");
         sb.append("<hr style=\"border:none;border-top:1px solid #e5e7eb;margin:20px 0;\">\n");
-        sb.append("<p style=\"color:#6b7280;font-size:12px;text-align:center;\">He thong tu dong - Production Management System</p>\n");
+        sb.append("<p style=\"color:#6b7280;font-size:12px;text-align:center;\">Hệ thống tự động - Production Management System</p>\n");
         sb.append("</div>\n");
         sb.append("</body>\n");
         sb.append("</html>");
@@ -573,18 +586,18 @@ public class EmailService implements Serializable {
         sb.append("<head><meta charset=\"UTF-8\"></head>\n");
         sb.append("<body style=\"margin:0;padding:0;font-family:Arial,sans-serif;\">\n");
         sb.append("<div style=\"background:#d97706;padding:24px;text-align:center;\">\n");
-        sb.append("<h1 style=\"color:white;margin:0;font-size:1.5rem;\">Hoa Don Moi Duoc Tao</h1>\n");
+        sb.append("<h1 style=\"color:white;margin:0;font-size:1.5rem;\">Hóa Đơn Mới Được Tạo</h1>\n");
         sb.append("</div>\n");
         sb.append("<div style=\"padding:24px;max-width:600px;margin:0 auto;background:#fff;\">\n");
-        sb.append("<p>Xin chao Admin,</p>\n");
-        sb.append("<p>Mot hoa don moi da duoc tao trong he thong. Vui long xem xet va tao QR thanh toan.</p>\n");
+        sb.append("<p>Xin chào Admin,</p>\n");
+        sb.append("<p>Một hóa đơn mới đã được tạo trong hệ thống. Vui lòng xem xét và tạo QR thanh toán.</p>\n");
         sb.append("<table style=\"width:100%;border-collapse:collapse;margin:20px 0;\">\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Ma hoa don</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(billCode).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Khach hang</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(cust).append("</td></tr>\n");
-        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Tong gia tri</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;color:#d97706;font-weight:bold;\">").append(formattedAmount).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Mã hóa đơn</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(billCode).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Khách hàng</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\">").append(cust).append("</td></tr>\n");
+        sb.append("<tr><td style=\"padding:12px 16px;border:1px solid #e5e7eb;\"><b>Tổng giá trị</b></td><td style=\"padding:12px 16px;border:1px solid #e5e7eb;color:#d97706;font-weight:bold;\">").append(formattedAmount).append("</td></tr>\n");
         sb.append("</table>\n");
         sb.append("<hr style=\"border:none;border-top:1px solid #e5e7eb;margin:20px 0;\">\n");
-        sb.append("<p style=\"color:#6b7280;font-size:12px;text-align:center;\">He thong tu dong - Production Management System</p>\n");
+        sb.append("<p style=\"color:#6b7280;font-size:12px;text-align:center;\">Hệ thống tự động - Production Management System</p>\n");
         sb.append("</div>\n");
         sb.append("</body>\n");
         sb.append("</html>");
@@ -611,6 +624,7 @@ public class EmailService implements Serializable {
 
     public boolean isConfigured() {
         return smtpHost != null && !smtpHost.trim().isEmpty()
-                && smtpUser != null && !smtpUser.trim().isEmpty();
+                && smtpUser != null && !smtpUser.trim().isEmpty()
+                && smtpPassword != null && !smtpPassword.trim().isEmpty();
     }
 }

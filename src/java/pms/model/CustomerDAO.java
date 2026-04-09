@@ -149,6 +149,10 @@ public class CustomerDAO {
         return SearchByColumn("customer_name", id);
     }
 
+    public CustomerDTO SearchByCustomerEmail(String email) {
+        return SearchByColumn("email", email);
+    }
+
     public List<CustomerDTO> searchCustomers(String keyword) {
         clearLastError();
         List<CustomerDTO> list = new ArrayList<>();

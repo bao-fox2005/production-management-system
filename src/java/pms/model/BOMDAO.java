@@ -53,30 +53,6 @@ public class BOMDAO {
         return list;
     }
 
-    /**
-     * Lấy danh sách BOM đang hoạt động (status = 'active').
-     * Dùng cho các màn hình vận hành như Tạo Lệnh Sản Xuất để ẩn
-     * các BOM đã "Ngừng sử dụng" mà không xóa dữ liệu lịch sử.
-     */
-    public List<BOMDTO> getActiveBOMS() {
-        List<BOMDTO> list = new ArrayList<>();
-        String sql = "SELECT b.*, i.item_name as product_name "
-                + "FROM BOM b "
-                + "LEFT JOIN Item i ON b.product_item_id = i.item_id "
-                + "WHERE b.status = 'active' "
-                + "ORDER BY b.created_date DESC";
-        try (Connection conn = DBUtils.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql);
-                ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                list.add(mapBOM(rs));
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return list;
-    }
-
     public List<BOMDTO> getBOMSByProduct(int productItemId) {
         List<BOMDTO> list = new ArrayList<>();
         String sql = "SELECT b.*, i.item_name as product_name "

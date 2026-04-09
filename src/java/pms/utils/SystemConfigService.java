@@ -30,6 +30,7 @@ public class SystemConfigService implements Serializable {
         DEFAULT_CONFIG.put("COMPANY_NAME", "PMS Company");
         DEFAULT_CONFIG.put("COMPANY_PHONE", "0123-456-789");
         DEFAULT_CONFIG.put("COMPANY_ADDRESS", "123 Duong ABC, Quan 1, TP.HCM");
+        DEFAULT_CONFIG.put("ADMIN_EMAIL", "");
     }
 
     public String getConfig(String key) {
@@ -56,12 +57,23 @@ public class SystemConfigService implements Serializable {
     }
 
     public boolean setConfig(String key, String value) {
-        String sql = "UPDATE SystemConfig SET config_value = ?, updated_at = GETDATE() WHERE config_key = ?";
+        String updateSql = "UPDATE SystemConfig SET config_value = ?, updated_at = GETDATE() WHERE config_key = ?";
+        String insertSql = "INSERT INTO SystemConfig (config_key, config_value, description) VALUES (?, ?, ?)";
         try (Connection con = DBUtils.getConnection();
-                PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, value);
-            ps.setString(2, key);
-            return ps.executeUpdate() > 0;
+                PreparedStatement updatePs = con.prepareStatement(updateSql)) {
+            updatePs.setString(1, value);
+            updatePs.setString(2, key);
+            int updated = updatePs.executeUpdate();
+            if (updated > 0) {
+                return true;
+            }
+
+            try (PreparedStatement insertPs = con.prepareStatement(insertSql)) {
+                insertPs.setString(1, key);
+                insertPs.setString(2, value);
+                insertPs.setString(3, "Dynamic config");
+                return insertPs.executeUpdate() > 0;
+            }
         } catch (Exception e) {
             if (!isMissingSystemConfigTable(e)) {
                 e.printStackTrace();
@@ -133,6 +145,11 @@ public class SystemConfigService implements Serializable {
     }
 
     public String getAdminEmail() {
+        String configuredAdminEmail = getConfig("ADMIN_EMAIL", "");
+        if (configuredAdminEmail != null && !configuredAdminEmail.trim().isEmpty()) {
+            return configuredAdminEmail.trim();
+        }
+
         String sql = "SELECT TOP 1 email FROM Users WHERE role = 'admin' AND email IS NOT NULL AND email != '' AND status = 'active'";
         try (Connection con = DBUtils.getConnection();
                 PreparedStatement ps = con.prepareStatement(sql);
@@ -156,12 +173,65 @@ public class SystemConfigService implements Serializable {
     public String getBankAccountName() { return getConfig("BANK_ACCOUNT_NAME"); }
     public int getQrExpireMinutes() {
         try {
-            return Integer.parseInt(getConfig("QR_EXPIRE_MINUTES", "15"));
-        } catch (Exception e) { return 15; }
+            return Integer.parseInt(getConfig("QR_EXPIRE_MINUTES", "1440"));
+        } catch (Exception e) { return 1440; }
     }
     public String getCompanyName() { return getConfig("COMPANY_NAME"); }
     public String getCompanyPhone() { return getConfig("COMPANY_PHONE"); }
     public String getCompanyAddress() { return getConfig("COMPANY_ADDRESS"); }
+
+    public boolean hasValidSmtpConfig() {
+        String host = trimToNull(getSmtpHost());
+        String user = trimToNull(getSmtpUser());
+        String password = trimToNull(getSmtpPassword());
+        String port = trimToNull(getSmtpPort());
+        return host != null
+                && user != null
+                && password != null
+                && port != null
+                && !isPlaceholderValue(user, "your-email@gmail.com")
+                && !isPlaceholderValue(password, "your-app-password");
+    }
+
+    public boolean hasValidBankReceiverConfig() {
+        String serialized = trimToNull(getConfig("BANK_RECEIVER_ACCOUNTS", ""));
+        if (serialized != null) {
+            String[] rows = serialized.split(";;");
+            for (String row : rows) {
+                String current = trimToNull(row);
+                if (current == null) {
+                    continue;
+                }
+                String[] parts = current.split("\\|\\|", -1);
+                if (parts.length < 4) {
+                    continue;
+                }
+                String bin = trimToNull(parts[1]);
+                String account = trimToNull(parts[2]);
+                String name = trimToNull(parts[3]);
+                if (hasCompleteBankReceiver(bin, account, name)) {
+                    return true;
+                }
+            }
+        }
+
+        String bankBin = trimToNull(getBankBin());
+        String bankAccount = trimToNull(getBankAccount());
+        String bankAccountName = trimToNull(getBankAccountName());
+        return hasCompleteBankReceiver(bankBin, bankAccount, bankAccountName);
+    }
+    private boolean hasCompleteBankReceiver(String bankBin, String bankAccount, String bankAccountName) {
+        return bankBin != null
+                && bankAccount != null
+                && bankAccountName != null
+                && !isDefaultBankReceiver(bankBin, bankAccount, bankAccountName);
+    }
+
+    private boolean isDefaultBankReceiver(String bankBin, String bankAccount, String bankAccountName) {
+        return isPlaceholderValue(bankBin, "970406")
+                && isPlaceholderValue(bankAccount, "1234567890")
+                && isPlaceholderValue(bankAccountName, "CONG TY TNHH PMS");
+    }
 
     public EmailService createEmailService() {
         EmailService email = new EmailService();
@@ -170,5 +240,19 @@ public class SystemConfigService implements Serializable {
         email.setSmtpUser(getSmtpUser());
         email.setSmtpPassword(getSmtpPassword());
         return email;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private boolean isPlaceholderValue(String value, String placeholder) {
+        String normalized = trimToNull(value);
+        String expected = trimToNull(placeholder);
+        return normalized != null && expected != null && normalized.equalsIgnoreCase(expected);
     }
 }
