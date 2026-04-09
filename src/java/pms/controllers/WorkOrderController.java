@@ -227,11 +227,17 @@ public class WorkOrderController extends HttpServlet {
                         // Đủ vật tư → đổi sang 'Ready' (Chờ SX)
                         boolean updated = dao.updateWorkOrderStatusOnly(woId, "Ready");
                         if (updated) {
+                            // Trừ vật tư luôn tại bước Cấp phát (Ready) để giữ kho
+                            for (BOMDetailDTO mat : materials) {
+                                int totalNeeded = (int) Math.ceil(mat.getQuantityRequired() * wo.getOrder_quantity());
+                                itemDao.decreaseStock(mat.getMaterialItemId(), totalNeeded);
+                            }
+
                             // Xóa notes cũ về thiếu vật tư
                             dao.updateNotesOnly(woId, "");
                             response.sendRedirect(request.getContextPath()
                                     + "/MainController?action=listWorkOrder&msg="
-                                    + java.net.URLEncoder.encode("Kho đã đủ vật tư! Lệnh chuyển sang Chờ SX.",
+                                    + java.net.URLEncoder.encode("Kho đã đủ vật tư và đã xuất kho! Lệnh chuyển sang Chờ SX.",
                                             "UTF-8"));
                         } else {
                             response.sendRedirect(request.getContextPath()
@@ -246,35 +252,19 @@ public class WorkOrderController extends HttpServlet {
 
             } else if ("startProduction".equals(action)) {
                 // ---------------------------------------------------------------
-                // Bắt đầu sản xuất: xuất kho nguyên liệu và đổi status → In Progress
+                // Bắt đầu sản xuất: đổi status → In Progress
+                // (Vật tư đã được trừ từ lúc chuyển sang Ready - Chờ SX)
                 // Chỉ cho phép khi WO đang ở trạng thái Ready
                 // ---------------------------------------------------------------
                 int woId = Integer.parseInt(request.getParameter("wo_id"));
                 WorkOrderDTO wo = dao.searchById(woId);
 
                 if (wo != null && "Ready".equalsIgnoreCase(wo.getStatus())) {
-                    BOMDAO bomDao = new BOMDAO();
-                    ItemDAO itemDao = new ItemDAO();
-
-                    // Lấy BOM của sản phẩm để biết cần xuất kho nguyên liệu nào
-                    List<BOMDTO> boms = bomDao.getBOMSByProduct(wo.getProduct_item_id());
-                    if (boms != null && !boms.isEmpty()) {
-                        BOMDTO activeBom = boms.get(0);
-                        List<BOMDetailDTO> materials = bomDao.getBOMDetails(activeBom.getBomId());
-
-                        for (BOMDetailDTO mat : materials) {
-                            // Tính tổng cần xuất (làm tròn lên để đủ)
-                            int totalNeeded = (int) Math.ceil(mat.getQuantityRequired() * wo.getOrder_quantity());
-                            // Giảm tồn kho nguyên liệu trong DB
-                            itemDao.decreaseStock(mat.getMaterialItemId(), totalNeeded);
-                        }
-                    }
-
                     // Đổi trạng thái WO sang In Progress
                     dao.updateStatusAndNotes(woId, "InProgress", "");
                     response.sendRedirect(request.getContextPath()
                             + "/MainController?action=listWorkOrder&msg="
-                            + java.net.URLEncoder.encode("Đã xuất kho vật tư! Lệnh đang được tiến hành sản xuất.",
+                            + java.net.URLEncoder.encode("Lệnh đang được tiến hành sản xuất.",
                                     "UTF-8"));
                     return;
                 }
