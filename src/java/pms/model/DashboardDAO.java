@@ -225,7 +225,7 @@ public class DashboardDAO {
     private List<double[]> getMonthlyRevenueData() {
         List<double[]> data = new ArrayList<>();
         String sql = "SELECT MONTH(bill_date) as m, SUM(total_amount) as t "
-                   + "FROM Bill WHERE YEAR(bill_date) = YEAR(GETDATE()) "
+                   + "FROM Bill WHERE YEAR(bill_date) = YEAR(GETDATE()) AND (status = 'paid' OR status = 'DaThu') "
                    + "GROUP BY MONTH(bill_date) ORDER BY MONTH(bill_date)";
         try (Connection conn = DBUtils.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
