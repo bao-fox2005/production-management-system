@@ -70,7 +70,7 @@
         <p class="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mt-4">Báo Cáo</p>
         <a href="ProductionTrackingController" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= "tracking".equals(activePage) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            Theo dõi Sản xuất & QC
+            Nhật ký sản lượng
         </a>
         <% } %>
 
