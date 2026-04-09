@@ -13,19 +13,21 @@ public class DashboardDAO {
         DashboardDTO dto = new DashboardDTO(); 
         
         dto.setTotalWorkOrders(countRows("Work_Order"));
-        dto.setWorkOrdersNew(countByStatus("Work_Order", "status", "New"));
-        dto.setWorkOrdersInProgress(countByStatus("Work_Order", "status", "InProgress"));
-        dto.setWorkOrdersDone(countByStatus("Work_Order", "status", "Done"));
+        dto.setWorkOrdersNew(countByStatus("Work_Order", "status", "New") + countByStatus("Work_Order", "status", "Ready"));
+        dto.setWorkOrdersInProgress(countByStatus("Work_Order", "status", "InProgress") + countByStatus("Work_Order", "status", "In Progress"));
+        dto.setWorkOrdersDone(countByStatus("Work_Order", "status", "Done") + countByStatus("Work_Order", "status", "Completed"));
         dto.setWorkOrdersCancelled(countByStatus("Work_Order", "status", "Cancelled"));
         
         dto.setTotalProductionLogs(countRows("Production_Log"));
         dto.setLogsToday(countToday("Production_Log", "log_date"));
         
+        dto.setTotalDefects(countTotalDefects());
+        
         dto.setTotalItems(countRows("Item"));
         dto.setLowStockItems(countLowStock());
         
         dto.setTotalBills(countRows("Bill"));
-        dto.setTotalRevenueThisMonth(getRevenueThisMonth());
+        dto.setTotalRevenueThisMonth(getTotalRevenue());
         
         dto.setTotalUsers(countRows("Users"));
         dto.setActiveUsers(countByStatus("Users", "status", "active"));
@@ -46,8 +48,8 @@ public class DashboardDAO {
         
         // Worker chỉ thấy lệnh sản xuất đang chạy
         dto.setTotalWorkOrders(countWorkerWorkOrders(workerUserId));
-        dto.setWorkOrdersInProgress(countWorkerWorkOrdersByStatus(workerUserId, "InProgress"));
-        dto.setWorkOrdersDone(countWorkerWorkOrdersByStatus(workerUserId, "Done"));
+        dto.setWorkOrdersInProgress(countWorkerWorkOrdersByStatus(workerUserId, "InProgress") + countWorkerWorkOrdersByStatus(workerUserId, "In Progress"));
+        dto.setWorkOrdersDone(countWorkerWorkOrdersByStatus(workerUserId, "Done") + countWorkerWorkOrdersByStatus(workerUserId, "Completed"));
         
         // Worker chỉ thấy nhật ký của mình
         dto.setTotalProductionLogs(countWorkerLogs(workerUserId));
@@ -124,9 +126,8 @@ public class DashboardDAO {
         return 0;
     }
 
-    private double getRevenueThisMonth() {
-        String sql = "SELECT ISNULL(SUM(total_amount), 0) FROM Bill "
-                   + "WHERE MONTH(bill_date) = MONTH(GETDATE()) AND YEAR(bill_date) = YEAR(GETDATE())";
+    private double getTotalRevenue() {
+        String sql = "SELECT ISNULL(SUM(total_amount), 0) FROM Bill WHERE status = 'paid' OR status = 'DaThu'";
         try (Connection conn = DBUtils.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
@@ -238,8 +239,8 @@ public class DashboardDAO {
         return data;
     }
 
-    public int countTodayDefects() {
-        String sql = "SELECT COUNT(*) FROM Defect_Reason";
+    public int countTotalDefects() {
+        String sql = "SELECT ISNULL(SUM(quantity_defective), 0) FROM Production_Log";
         try (Connection conn = DBUtils.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {

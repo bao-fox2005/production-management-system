@@ -31,11 +31,14 @@
 <%@page import="pms.model.DefectDTO"%>
 <%@page import="pms.model.UserDTO"%>
 <%@page import="java.util.List"%>
+<%@page import="java.util.Map"%>
 <%@page import="java.text.SimpleDateFormat"%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%
     List<ProductionLogDTO> listLogs = (List<ProductionLogDTO>) request.getAttribute("listLogs");
     List<WorkOrderDTO> listWO = (List<WorkOrderDTO>) request.getAttribute("listWO");
+    List<WorkOrderDTO> activeWOs = (List<WorkOrderDTO>) request.getAttribute("activeWOs");
+    Map<Integer, Integer> woProgressMap = (Map<Integer, Integer>) request.getAttribute("woProgressMap");
     List<RoutingStepDTO> listSteps = (List<RoutingStepDTO>) request.getAttribute("listSteps");
     List<DefectDTO> listDefects = (List<DefectDTO>) request.getAttribute("listDefects");
     UserDTO user = (UserDTO) session.getAttribute("user");
@@ -44,6 +47,8 @@
     
     if (listLogs == null) listLogs = new java.util.ArrayList<>();
     if (listWO == null) listWO = new java.util.ArrayList<>();
+    if (activeWOs == null) activeWOs = new java.util.ArrayList<>();
+    if (woProgressMap == null) woProgressMap = new java.util.HashMap<>();
     if (listSteps == null) listSteps = new java.util.ArrayList<>();
     if (listDefects == null) listDefects = new java.util.ArrayList<>();
     
@@ -53,6 +58,9 @@
     String userRole = user != null ? user.getRole() : "user";
     String userInitial = userName.substring(0, 1).toUpperCase();
     boolean isAdmin = "admin".equalsIgnoreCase(userRole);
+    boolean isWorker = "employee".equalsIgnoreCase(userRole)
+            || "worker".equalsIgnoreCase(userRole)
+            || "user".equalsIgnoreCase(userRole);
     
     Boolean sessionDark = (Boolean) session.getAttribute("darkMode");
     boolean isDarkMode = sessionDark != null ? sessionDark : false;
@@ -180,12 +188,6 @@
                         <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Nhật ký sản xuất</h1>
                         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Ghi nhận sản lượng hoàn thành, lỗi phát sinh và theo dõi tiến độ thực tế theo từng công đoạn</p>
                     </div>
-                    <button type="button" onclick="openLogModal()" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-amber-500/30 transition-all hover:bg-amber-600 sm:w-auto sm:self-start xl:flex-shrink-0">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                        </svg>
-                        Tạo báo cáo
-                    </button>
                 </div>
 
                 <!-- Alerts -->
@@ -246,16 +248,83 @@
                     </div>
                 </div>
 
+                <!-- Đang Sản Xuất (In Progress) -->
+                <div class="mb-6 section-card rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 dark:border-slate-700">
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Đang sản xuất</h3>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Danh sách lệnh sản xuất đang chạy và tiến độ</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80">
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Mã LSX</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Sản phẩm</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Tiến độ</th>
+                                    <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Hành động</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            <% if (activeWOs.isEmpty()) { %>
+                                <tr>
+                                    <td colspan="4" class="px-4 py-8 text-center text-slate-400">Chưa có lệnh nào đang sản xuất.</td>
+                                </tr>
+                            <% } else { %>
+                                <% for (WorkOrderDTO wo : activeWOs) {
+                                    int done = woProgressMap.getOrDefault(wo.getWo_id(), 0);
+                                    int req = wo.getOrder_quantity();
+                                    boolean theEnd = done >= req;
+                                %>
+                                <tr class="border-b border-slate-50 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+                                    <td class="px-4 py-3 font-semibold text-teal-600 dark:text-teal-300">#WO-<%= wo.getWo_id() %></td>
+                                    <td class="px-4 py-3 font-medium text-slate-700 dark:text-slate-300"><%= wo.getProductName() != null ? wo.getProductName() : "Sản phẩm #" + wo.getProduct_item_id() %></td>
+                                    <td class="px-4 py-3">
+                                        <div class="flex flex-col items-end">
+                                            <span class="text-sm font-semibold <%= theEnd ? "text-emerald-600" : "text-amber-600" %>"><%= done %> / <%= req %></span>
+                                            <div class="mt-1.5 h-2 w-24 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                                                <div class="h-full rounded-full transition-all <%= theEnd ? "bg-emerald-500" : "bg-amber-500" %>" style="width: <%= Math.min(100, Math.max(0, (int)((done/(float)req)*100))) %>%"></div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <% if (isWorker) { %>
+                                            <% if (theEnd) { %>
+                                                <form action="ProductionLogController" method="post" class="inline">
+                                                    <input type="hidden" name="action" value="completeWorkOrder">
+                                                    <input type="hidden" name="workOrderId" value="<%= wo.getWo_id() %>">
+                                                    <button type="submit" class="rounded-xl px-3 py-1.5 bg-emerald-500 text-white font-semibold text-sm hover:bg-emerald-600 transition">Hoàn thành</button>
+                                                </form>
+                                            <% } else { %>
+                                                <button type="button" onclick="openLogModal(<%= wo.getWo_id() %>)" class="rounded-xl px-3 py-1.5 bg-amber-500 text-white font-semibold text-sm hover:bg-amber-600 transition">Báo cáo</button>
+                                            <% } %>
+                                        <% } else { %>
+                                            <span class="text-sm text-slate-400">Chỉ xem</span>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                                <% } %>
+                            <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="section-card rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                             <div class="p-4 border-b border-slate-100 dark:border-slate-700">
-                                <div class="flex items-center justify-between">
+                                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                     <div>
                                         <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Lịch sử báo cáo</h3>
                                         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Toàn bộ bản ghi sản lượng theo lệnh và công đoạn</p>
                                     </div>
-                                    <span class="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium">
-                                        <%= totalLogs %> bản ghi
-                                    </span>
+                                    <div class="flex items-center gap-4">
+                                        <div class="relative">
+                                            <input type="text" id="logSearchInput" onkeyup="filterLogTable()" placeholder="Tìm kiếm lịch sử..." class="pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:border-teal-500 transition-colors">
+                                            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                        </div>
+                                        <span class="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium">
+                                            <%= totalLogs %> bản ghi
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                             <div class="overflow-x-auto">
@@ -268,6 +337,9 @@
                                             <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Lỗi</th>
                                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Lý do</th>
                                             <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Thời gian</th>
+                                            <% if (isWorker) { %>
+                                            <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Tùy chọn</th>
+                                            <% } %>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -282,14 +354,8 @@
                                                     </div>
                                                     <div>
                                                         <p class="font-medium text-slate-700 dark:text-slate-200">Chưa có bản ghi nào</p>
-                                                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Tạo báo cáo đầu tiên để bắt đầu ghi nhận sản lượng</p>
+                                                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Bấm báo cáo từ các lệnh dưới phần Đang sản xuất.</p>
                                                     </div>
-                                                    <button type="button" onclick="openLogModal()" class="inline-flex items-center gap-2 rounded-2xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-amber-500/30 transition-all hover:bg-amber-600">
-                                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                                                        </svg>
-                                                        Tạo báo cáo
-                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -310,6 +376,15 @@
                                                 <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-sm">
                                                     <%= log.getLogDate() != null ? sdf.format(log.getLogDate()) : "-" %>
                                                 </td>
+                                                <% if (isWorker) { %>
+                                                <td class="px-4 py-3 text-right">
+                                                    <form action="ProductionLogController" method="post" onsubmit="return confirm('Xóa báo cáo này?');">
+                                                        <input type="hidden" name="action" value="delete">
+                                                        <input type="hidden" name="logId" value="<%= log.getLogId() %>">
+                                                        <button type="submit" class="text-rose-500 hover:text-rose-700 font-semibold text-sm">Xóa</button>
+                                                    </form>
+                                                </td>
+                                                <% } %>
                                             </tr>
                                             <% } %>
                                         <% } %>
@@ -338,7 +413,7 @@
                     </svg>
                 </button>
             </div>
-            <form action="MainController" method="post" class="space-y-5 p-6 bg-white/90 dark:bg-slate-900/60">
+            <form action="ProductionLogController" method="post" class="space-y-5 p-6 bg-white/90 dark:bg-slate-900/60">
                 <input type="hidden" name="action" value="addLog">
 
                 <div class="grid gap-5 md:grid-cols-2">
@@ -395,8 +470,14 @@
     </div>
 
     <script>
-        function openLogModal() {
+        function openLogModal(woId) {
             const modal = document.getElementById('logModal');
+            if(woId) {
+                const selectElement = document.querySelector('select[name="workOrderId"]');
+                if(selectElement) {
+                    selectElement.value = woId;
+                }
+            }
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }

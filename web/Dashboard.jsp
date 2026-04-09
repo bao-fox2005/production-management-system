@@ -242,7 +242,7 @@
                     <div class="kpi-card rounded-2xl bg-white p-6 shadow-sm border-t-4 border-emerald-500 dark:bg-slate-800">
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
-                                <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Tổng Thu (Tháng)</p>
+                                <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Tổng Thu Nhập</p>
                                 <p class="text-3xl font-bold text-emerald-600 mt-2"><%= data.getFormattedRevenue() %></p>
                                 <div class="flex items-center gap-2 mt-2">
                                     <span class="text-xs text-emerald-600 font-medium flex items-center gap-1">
@@ -402,7 +402,7 @@
                             </div>
                             <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Tạo Hóa Đơn</span>
                         </a>
-                        <a href="SearchPurchaseOrder.jsp" class="flex flex-col items-center gap-2 rounded-xl border border-slate-200 p-4 transition-all hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:hover:bg-slate-700/70">
+                        <a href="MainController?action=listPurchaseOrder" class="flex flex-col items-center gap-2 rounded-xl border border-slate-200 p-4 transition-all hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:hover:bg-slate-700/70">
                             <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
                                 <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
                             </div>

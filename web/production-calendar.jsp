@@ -56,6 +56,7 @@
     // Trả về class CSS cho wo-item theo status
     String woClass(String status) {
         if (status == null) return "wo-new";
+        if (status.equalsIgnoreCase("Ready")) return "wo-ready";
         if (status.equalsIgnoreCase("InProgress") || status.equalsIgnoreCase("In Progress")) return "wo-progress";
         if (status.equalsIgnoreCase("Done") || status.equalsIgnoreCase("Completed")) return "wo-done";
         if (status.equalsIgnoreCase("Cancelled")) return "wo-cancelled";
@@ -166,10 +167,12 @@
             pointer-events: none; /* click handled by day cell */
         }
         .wo-new      { background:#dbeafe; color:#1d4ed8; border-left:3px solid #3b82f6; }
+        .wo-ready    { background:#1d4ed8; color:#ffffff; border-left:3px solid #1e3a8a; }
         .wo-progress { background:#fef3c7; color:#b45309; border-left:3px solid #f59e0b; }
         .wo-done     { background:#d1fae5; color:#047857; border-left:3px solid #10b981; }
         .wo-cancelled{ background:#fee2e2; color:#b91c1c; border-left:3px solid #ef4444; text-decoration:line-through; }
         .dark .wo-new      { background:rgba(59,130,246,0.18); color:#93c5fd; }
+        .dark .wo-ready    { background:rgba(29,78,216,0.8); color:#eff6ff; border-left:3px solid #3b82f6; }
         .dark .wo-progress { background:rgba(245,158,11,0.18); color:#fcd34d; }
         .dark .wo-done     { background:rgba(16,185,129,0.18); color:#6ee7b7; }
         .dark .wo-cancelled{ background:rgba(239,68,68,0.18); color:#fca5a5; }
@@ -197,10 +200,12 @@
         .dark #dayModalBox { background:#1e293b; color:#f1f5f9; }
         .wo-modal-row { border-radius:12px; padding:12px 14px; margin-bottom:8px; }
         .wo-modal-row.new      { background:#eff6ff; border-left:4px solid #3b82f6; }
+        .wo-modal-row.ready    { background:#eff6ff; border-left:4px solid #1d4ed8; }
         .wo-modal-row.progress { background:#fffbeb; border-left:4px solid #f59e0b; }
         .wo-modal-row.done     { background:#f0fdf4; border-left:4px solid #10b981; }
         .wo-modal-row.cancelled{ background:#fef2f2; border-left:4px solid #ef4444; }
         .dark .wo-modal-row.new      { background:rgba(59,130,246,0.12); }
+        .dark .wo-modal-row.ready    { background:rgba(29,78,216,0.12); border-left:4px solid #3b82f6; }
         .dark .wo-modal-row.progress { background:rgba(245,158,11,0.12); }
         .dark .wo-modal-row.done     { background:rgba(16,185,129,0.12); }
         .dark .wo-modal-row.cancelled{ background:rgba(239,68,68,0.12); }
@@ -355,6 +360,9 @@
                         <span class="h-4 w-4 rounded-[4px] bg-blue-100 ring-1 ring-blue-500 dark:bg-blue-500/20"></span>Mới tạo
                     </div>
                     <div class="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                        <span class="h-4 w-4 rounded-[4px] bg-sky-100 ring-1 ring-sky-500 dark:bg-sky-500/20"></span>Chờ SX
+                    </div>
+                    <div class="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
                         <span class="h-4 w-4 rounded-[4px] bg-amber-100 ring-1 ring-amber-500 dark:bg-amber-500/20"></span>Đang sản xuất
                     </div>
                     <div class="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
@@ -397,6 +405,8 @@ const WO_DATA = [
         String st    = wo.getStatus() != null ? wo.getStatus() : "";
         String pname = wo.getProductName() != null ? wo.getProductName().replace("\"","\\\"") : "";
         String cname = wo.getCustomerName() != null ? wo.getCustomerName().replace("\"","\\\"") : "";
+        String rname = wo.getRoutingName() != null ? wo.getRoutingName().replace("\"","\\\"") : "";
+        String wnotes = wo.getNotes() != null ? wo.getNotes().replace("\"","\\\"").replace("\n"," ") : "";
 
         // Determine appear dates for JS (minimal: start, end for ranged; single for others)
         String appearStart = "";
@@ -405,7 +415,8 @@ const WO_DATA = [
             appearStart = wo.getStart_date() != null && !wo.getStart_date().isEmpty() ? wo.getStart_date().split(" ")[0] : (wo.getCreated_date() != null ? wo.getCreated_date().split(" ")[0] : "");
             appearEnd   = wo.getDue_date() != null && !wo.getDue_date().isEmpty() ? wo.getDue_date().split(" ")[0] : appearStart;
         } else if (st.equalsIgnoreCase("Done") || st.equalsIgnoreCase("Completed")) {
-            appearStart = wo.getCompleted_date() != null && !wo.getCompleted_date().isEmpty() ? wo.getCompleted_date().split(" ")[0] : "";
+            String tempEnd = wo.getDue_date() != null && !wo.getDue_date().isEmpty() ? wo.getDue_date().split(" ")[0] : (wo.getStart_date() != null && !wo.getStart_date().isEmpty() ? wo.getStart_date().split(" ")[0] : (wo.getCreated_date() != null ? wo.getCreated_date().split(" ")[0] : ""));
+            appearStart = wo.getCompleted_date() != null && !wo.getCompleted_date().isEmpty() ? wo.getCompleted_date().split(" ")[0] : tempEnd;
             appearEnd   = appearStart;
         } else if (st.equalsIgnoreCase("Cancelled")) {
             appearStart = wo.getDue_date() != null && !wo.getDue_date().isEmpty() ? wo.getDue_date().split(" ")[0] : (wo.getCreated_date() != null ? wo.getCreated_date().split(" ")[0] : "");
@@ -414,6 +425,15 @@ const WO_DATA = [
             appearStart = wo.getStart_date() != null && !wo.getStart_date().isEmpty() ? wo.getStart_date().split(" ")[0] : (wo.getCreated_date() != null ? wo.getCreated_date().split(" ")[0] : "");
             appearEnd   = appearStart;
         }
+
+        // Compute status label and badge class inline
+        String statusLbl = st;
+        String badgeCls = "bg-slate-100 text-slate-600";
+        if ("New".equalsIgnoreCase(st)) { statusLbl = "Mới"; badgeCls = "bg-blue-100 text-blue-700"; }
+        else if ("Ready".equalsIgnoreCase(st)) { statusLbl = "Chờ SX"; badgeCls = "bg-blue-700 text-white shadow-sm shadow-blue-500/30"; }
+        else if ("InProgress".equalsIgnoreCase(st) || "In Progress".equalsIgnoreCase(st)) { statusLbl = "Đang SX"; badgeCls = "bg-amber-100 text-amber-700"; }
+        else if ("Done".equalsIgnoreCase(st) || "Completed".equalsIgnoreCase(st)) { statusLbl = "Hoàn thành"; badgeCls = "bg-emerald-100 text-emerald-700"; }
+        else if ("Cancelled".equalsIgnoreCase(st)) { statusLbl = "Đã hủy"; badgeCls = "bg-red-100 text-red-700"; }
 %>
   {
     id: <%= wo.getWo_id() %>,
@@ -421,12 +441,14 @@ const WO_DATA = [
     customer: "<%= cname %>",
     qty: <%= wo.getOrder_quantity() %>,
     status: "<%= st %>",
-    statusLabel: "<%= wo.getStatusLabel() %>",
-    badgeClass: "<%= wo.getStatusBadgeClass() %>",
+    statusLabel: "<%= statusLbl %>",
+    badgeClass: "<%= badgeCls %>",
     created:   "<%= fmtDateFull(wo.getCreated_date()) %>",
     start:     "<%= fmtDateFull(wo.getStart_date()) %>",
     due:       "<%= fmtDateFull(wo.getDue_date()) %>",
     completed: "<%= fmtDateFull(wo.getCompleted_date()) %>",
+    routing: "<%= rname %>",
+    notes: "<%= wnotes %>",
     appearStart: "<%= appearStart %>",
     appearEnd:   "<%= appearEnd %>"
   }
@@ -440,46 +462,64 @@ function dateInRange(dateKey, start, end) {
 }
 
 function openDayDetail(dateKey) {
-    const orders = WO_DATA.filter(wo => dateInRange(dateKey, wo.appearStart, wo.appearEnd));
-    const parts  = dateKey.split('-');
-    const title  = parts[2] + '/' + parts[1] + '/' + parts[0];
+    var orders = WO_DATA.filter(function(wo) { return dateInRange(dateKey, wo.appearStart, wo.appearEnd); });
+    var parts  = dateKey.split('-');
+    var title  = parts[2] + '/' + parts[1] + '/' + parts[0];
 
     document.getElementById('dayModalTitle').textContent = 'Ngày ' + title;
 
-    const content = document.getElementById('dayModalContent');
+    var content = document.getElementById('dayModalContent');
     if (orders.length === 0) {
         content.innerHTML = '<p class="text-center text-sm text-slate-400 py-8">Không có lệnh sản xuất nào trong ngày này.</p>';
     } else {
-        content.innerHTML = orders.map(wo => {
-            const cls = wo.status.toLowerCase().includes('progress') ? 'progress'
-                      : wo.status.toLowerCase().includes('done') || wo.status.toLowerCase().includes('complete') ? 'done'
-                      : wo.status.toLowerCase().includes('cancel') ? 'cancelled' : 'new';
-
-            let dateLines = '';
-            if (wo.created)   dateLines += `<span class="text-xs text-slate-500 dark:text-slate-400">📅 Tạo: <b>${wo.created}</b></span> `;
-            if (wo.start)     dateLines += `<span class="text-xs text-slate-500 dark:text-slate-400">🚀 Bắt đầu: <b>${wo.start}</b></span> `;
-            if (wo.due)       dateLines += `<span class="text-xs text-slate-500 dark:text-slate-400">⏰ Hạn: <b>${wo.due}</b></span> `;
-            if (wo.completed) dateLines += `<span class="text-xs text-emerald-600 dark:text-emerald-400">✅ Hoàn thành: <b>${wo.completed}</b></span> `;
-
-            return `<div class="wo-modal-row ${cls}">
-                <div class="flex items-start justify-between gap-3">
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <span class="text-sm font-bold text-slate-900 dark:text-slate-100">#${wo.id}</span>
-                            <span class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">${wo.product}</span>
-                            <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${wo.badgeClass}">${wo.statusLabel}</span>
-                        </div>
-                        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">SL: <b>${wo.qty}</b>${wo.customer ? ' · KH: <b>' + wo.customer + '</b>' : ''}</div>
-                        <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1">${dateLines}</div>
-                    </div>
-                    <a href="MainController?action=listWorkOrder&search=${wo.id}"
-                       onclick="event.stopPropagation()"
-                       class="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 transition-colors">
-                        Xem lệnh
-                    </a>
-                </div>
-            </div>`;
-        }).join('');
+        var html = '';
+        for (var i = 0; i < orders.length; i++) {
+            var wo = orders[i];
+            html += '<div class="rounded-2xl border border-slate-200 bg-white p-5 mb-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">';
+            html += '<div class="grid gap-4" style="grid-template-columns: 1fr 1fr;">';
+            html += '<div>';
+            html += '<p class="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">Mã lệnh</p>';
+            html += '<p class="mt-1 text-base font-bold text-slate-900 dark:text-slate-100">#WO-' + wo.id + '</p>';
+            html += '</div>';
+            html += '<div>';
+            html += '<p class="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">Trạng thái</p>';
+            html += '<p class="mt-1 text-base font-bold text-slate-900 dark:text-slate-100">' + (wo.statusLabel || wo.status) + '</p>';
+            html += '</div>';
+            html += '<div>';
+            html += '<p class="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">Sản phẩm</p>';
+            html += '<p class="mt-1 text-base font-bold text-slate-900 dark:text-slate-100">' + (wo.product || '-') + '</p>';
+            html += '</div>';
+            html += '<div>';
+            html += '<p class="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">Số lượng</p>';
+            html += '<p class="mt-1 text-base font-bold text-slate-900 dark:text-slate-100">' + wo.qty + '</p>';
+            html += '</div>';
+            html += '<div>';
+            html += '<p class="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">Ngày bắt đầu</p>';
+            html += '<p class="mt-1 text-base font-bold text-slate-900 dark:text-slate-100">' + (wo.start || 'Chưa xác định') + '</p>';
+            html += '</div>';
+            html += '<div>';
+            html += '<p class="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">Hạn chót</p>';
+            html += '<p class="mt-1 text-base font-bold text-slate-900 dark:text-slate-100">' + (wo.due || 'Chưa xác định') + '</p>';
+            html += '</div>';
+            if (wo.completed) {
+                html += '<div>';
+                html += '<p class="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">Ngày hoàn thành</p>';
+                html += '<p class="mt-1 text-base font-bold text-emerald-600 dark:text-emerald-400">' + wo.completed + '</p>';
+                html += '</div>';
+            }
+            if (wo.notes && wo.notes.trim()) {
+                html += '<div style="grid-column: span 2;">';
+                html += '<p class="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">Ghi chú</p>';
+                html += '<p class="mt-1 text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2">' + wo.notes + '</p>';
+                html += '</div>';
+            }
+            html += '</div>';
+            html += '<div class="mt-4 flex justify-end">';
+            html += '<button type="button" onclick="closeDayDetail()" class="rounded-2xl border border-slate-200 px-5 py-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Đóng</button>';
+            html += '</div>';
+            html += '</div>';
+        }
+        content.innerHTML = html;
     }
     document.getElementById('dayModal').classList.add('open');
     document.body.style.overflow = 'hidden';

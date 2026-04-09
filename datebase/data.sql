@@ -77,15 +77,41 @@ VALUES
 GO
 
 -- [Tenant] Cấu hình multi-tenant
--- Dòng "default" tương ứng với tenant_code mà TenantBootstrapListener dùng làm fallback
--- tenant_code "default" không cần đăng ký lại (TenantBootstrapListener hardcode rồi)
--- Chỉ cần dữ liệu ở đây để TenantController hiển thị danh sách
 INSERT INTO Tenant (tenant_code, tenant_name, db_host, db_name, db_user, db_password,
                     contact_email, contact_phone, subscription_plan, expiration_date, active, notes)
 VALUES
     ('default', N'Xưởng Sản Xuất Chính', 'localhost', 'FactoryERD', 'SA', '12345',
      'admin@factory.vn', '0901000001', 'pro', '2027-12-31', 1,
      N'Tenant mặc định – kết nối database chính FactoryERD');
+GO
+
+-- [SystemConfig] Cấu hình mặc định cho SMTP / QR / tài khoản nhận tiền
+INSERT INTO SystemConfig (config_key, config_value, description)
+VALUES
+    ('SMTP_HOST', N'smtp.gmail.com', N'SMTP host'),
+    ('SMTP_PORT', N'587', N'SMTP port'),
+    ('SMTP_USER', N'your-email@gmail.com', N'SMTP username'),
+    ('SMTP_PASSWORD', N'your-app-password', N'SMTP password'),
+    ('ADMIN_EMAIL', N'admin@factory.vn', N'Admin email nhận thông báo'),
+    ('BANK_BIN', N'970436', N'Ngân hàng nhận tiền mặc định'),
+    ('BANK_ACCOUNT', N'1234567890', N'Số tài khoản nhận tiền mặc định'),
+    ('BANK_ACCOUNT_NAME', N'CONG TY TNHH SAN XUAT FACTORY', N'Tên tài khoản nhận tiền mặc định'),
+    ('QR_EXPIRE_MINUTES', N'1440', N'Thời hạn QR (phút)'),
+    ('MAX_FILE_SIZE_MB', N'10', N'Giới hạn upload file (MB)'),
+    ('AUTO_PAYMENT_CHECK_SECONDS', N'30', N'Chu kỳ kiểm tra thanh toán tự động'),
+    ('COMPANY_NAME', N'PMS Company', N'Tên công ty'),
+    ('COMPANY_PHONE', N'0123-456-789', N'Số điện thoại công ty'),
+    ('COMPANY_ADDRESS', N'123 Duong ABC, Quan 1, TP.HCM', N'Địa chỉ công ty'),
+    ('APP_BASE_URL', N'http://localhost:8080/production-management-system', N'Base URL ứng dụng'),
+    ('BANK_PRIMARY_BIN', N'970436', N'BIN tài khoản nhận tiền chính'),
+    ('BANK_PRIMARY_ACCOUNT', N'1234567890', N'Số tài khoản nhận tiền chính'),
+    ('BANK_PRIMARY_ACCOUNT_NAME', N'CONG TY TNHH SAN XUAT FACTORY', N'Tên tài khoản nhận tiền chính'),
+    ('BANK_ALT_BIN', N'', N'BIN tài khoản nhận tiền phụ'),
+    ('BANK_ALT_ACCOUNT', N'', N'Số tài khoản nhận tiền phụ'),
+    ('BANK_ALT_ACCOUNT_NAME', N'', N'Tên tài khoản nhận tiền phụ'),
+    ('BANK_PRIMARY_PROFILE', N'PRIMARY', N'Tài khoản đang ưu tiên hiển thị'),
+    ('BANK_RECEIVER_ACCOUNTS', N'A1||970436||1234567890||CONG TY TNHH SAN XUAT FACTORY', N'Danh sách tài khoản nhận tiền'),
+    ('BANK_ACTIVE_ACCOUNT_ID', N'A1', N'ID tài khoản nhận tiền đang active');
 GO
 
 -- ============================================================
@@ -129,7 +155,6 @@ VALUES
 GO
 
 -- [BOM] Định mức nguyên liệu – Header
--- ĐÚNG SCHEMA MỚI: INSERT vào bảng BOM trước, lấy bom_id, rồi INSERT BOM_Detail
 INSERT INTO BOM (product_item_id, bom_version, status, notes)
 VALUES
     (1, 'v1.0', 'active',   N'Công thức cơ bản cho Bàn gỗ văn phòng'),
@@ -138,7 +163,6 @@ VALUES
 GO
 
 -- [BOM_Detail] Chi tiết nguyên liệu cho từng BOM
--- BOM #1 (Bàn gỗ): cần 2 tấm MDF, 20 hộp ốc vít, 0.5 lít keo, 1 lít sơn
 INSERT INTO BOM_Detail (bom_id, material_item_id, quantity_required, unit, waste_percent, notes)
 VALUES
     (1, 4, 2.0,  N'Tấm', 5.0, N'MDF làm mặt bàn + chân bàn; hao hụt 5% do cắt'),
@@ -146,7 +170,6 @@ VALUES
     (1, 7, 0.5,  N'Lít', 0.0, N'Keo PVA dán các mối ghép'),
     (1, 8, 1.0,  N'Lít', 0.0, N'Sơn phủ 2 lớp lót + 1 lớp bóng');
 
--- BOM #2 (Ghế gỗ): cần 1 tấm MDF, 10 ốc, 0.3 keo, 0.8 sơn
 INSERT INTO BOM_Detail (bom_id, material_item_id, quantity_required, unit, waste_percent, notes)
 VALUES
     (2, 4, 1.0,  N'Tấm', 5.0, N'MDF làm mặt ngồi + tựa lưng'),
@@ -154,7 +177,6 @@ VALUES
     (2, 7, 0.3,  N'Lít', 0.0, N'Keo PVA'),
     (2, 8, 0.8,  N'Lít', 0.0, N'Sơn phủ ghế');
 
--- BOM #3 (Tủ hồ sơ – ngừng dùng): để lại làm lịch sử
 INSERT INTO BOM_Detail (bom_id, material_item_id, quantity_required, unit, waste_percent, notes)
 VALUES
     (3, 4, 3.0,  N'Tấm', 8.0, N'MDF làm các tấm tủ – hao hụt 8% do cắt phức tạp'),
@@ -162,6 +184,7 @@ VALUES
 GO
 
 -- [Work_Order] Lệnh sản xuất
+-- Status hợp lệ: New, Ready, InProgress, Done, Cancelled
 INSERT INTO Work_Order (product_item_id, routing_id, order_quantity, status, start_date, due_date, notes)
 VALUES
     (1, 1, 10, 'InProgress', '2026-04-01', '2026-04-10', N'Lô sản xuất Bàn gỗ tháng 4 cho khách ABC'),
@@ -170,7 +193,6 @@ VALUES
 GO
 
 -- [Production_Log] Nhật ký sản xuất
--- Công nhân 1 (user_id=2) làm bước Cắt gỗ (step_id=1) cho WO #1
 INSERT INTO Production_Log (wo_id, step_id, worker_user_id, produced_quantity, defect_id, log_date)
 VALUES
     (1, 1, 2, 10, NULL,  '2026-04-01'),  -- Cắt gỗ không lỗi
@@ -182,7 +204,6 @@ VALUES
 GO
 
 -- [QC_Inspection] Kiểm tra chất lượng
--- QC tại bước kiểm tra cuối (step_id=5) của WO #3 (đã Done)
 INSERT INTO QC_Inspection (wo_id, step_id, inspector_user_id, inspection_result,
                            quantity_inspected, quantity_passed, quantity_failed, notes)
 VALUES
@@ -191,15 +212,20 @@ VALUES
 GO
 
 -- [Bill] Hóa đơn chốt đơn
-INSERT INTO Bill (wo_id, customer_id, total_amount, bill_date)
+INSERT INTO Bill (wo_id, customer_id, total_amount, bill_date, status, bill_created_at, confirmed_paid_at, cancelled_at)
 VALUES
-    (3, 1, 7500000.00, '2026-03-12'),   -- WO #3 Done → xuất hóa đơn cho khách ABC
-    (1, 3, 25000000.00, '2026-04-09');  -- WO #1 đang chạy nhưng đặt cọc trước
+    (3, 1, 7500000.00, '2026-03-12', 'paid',    '2026-03-12 08:55:00', '2026-03-12 09:07:23', NULL),
+    (1, 3, 25000000.00, '2026-04-09', 'pending', '2026-04-09 10:00:00', NULL, NULL);
+GO
+
+-- [Bill_Line] Chi tiết hóa đơn
+INSERT INTO Bill_Line (bill_id, item_type, quantity, unit_price, line_total, created_at)
+VALUES
+    (1, N'Bàn gỗ văn phòng', 3, 2500000.00, 7500000.00, '2026-03-12 08:56:00'),
+    (2, N'Bàn gỗ văn phòng', 10, 2500000.00, 25000000.00, '2026-04-09 10:01:00');
 GO
 
 -- [Payment] Thanh toán
--- Bill #1: đã thanh toán QR
--- Bill #2: đang chờ thanh toán
 INSERT INTO Payment (bill_id, amount, payment_method, status, transaction_id,
                      created_at, expires_at, paid_at,
                      bank_bin, bank_account, bank_account_name, customer_name)
@@ -212,41 +238,38 @@ VALUES
      '970436', '1234567890', N'CONG TY TNHH SAN XUAT FACTORY', N'Văn Phòng Luật DEF');
 GO
 
--- [InventoryLog] Lịch sử xuất/nhập kho
-INSERT INTO InventoryLog (item_id, change_type, quantity_change, reference_type, reference_id,
-                          notes, changed_by, changed_at)
+-- [Inventory_Log] Lịch sử xuất/nhập kho
+-- ★ Tên bảng: Inventory_Log (có dấu gạch dưới, khớp Table.sql)
+INSERT INTO Inventory_Log (item_id, change_type, quantity_before, quantity_change, quantity_after,
+                           reference_type, reference_id, reason, performed_by, log_date)
 VALUES
-    -- Nhập kho MDF khi mua hàng
-    (4, 'IN',  50, 'PurchaseOrder', 1, N'Nhập 50 tấm MDF từ Gỗ An Cường',   1, '2026-03-28 08:00:00'),
-    -- Xuất kho MDF cho lệnh sản xuất WO #1
-    (4, 'OUT', 20, 'WorkOrder',     1, N'Xuất 20 tấm MDF cho đơn Bàn tháng 4', 2, '2026-04-01 07:30:00'),
-    -- Nhập kho ốc vít
-    (5, 'IN', 200, 'PurchaseOrder', 2, N'Nhập ốc vít M5 đã được duyệt',      1, '2026-03-30 09:00:00'),
-    -- Xuất kho sản phẩm hoàn thành (tăng kho thành phẩm)
-    (1, 'IN',   3, 'WorkOrder',     3, N'Hoàn thành WO #3 – nhập 3 Bàn vào kho', 1, '2026-03-10 16:00:00'),
-    -- Xuất kho giao khách hàng
-    (1, 'OUT',  3, 'Manual',        NULL, N'Giao hàng cho Công ty ABC theo Bill #1', 1, '2026-03-12 10:00:00');
+    (4, 'IN',  50,  50, 100, 'PurchaseOrder', 1, N'Nhập 50 tấm MDF từ Gỗ An Cường', 1, '2026-03-28'),
+    (4, 'OUT', 100, 20,  80, 'WorkOrder',     1, N'Xuất 20 tấm MDF cho đơn Bàn tháng 4', 2, '2026-04-01'),
+    (5, 'IN',  300, 200, 500, 'PurchaseOrder', 2, N'Nhập ốc vít M5 đã được duyệt', 1, '2026-03-30'),
+    (1, 'IN',    7,   3,  10, 'WorkOrder',     3, N'Hoàn thành WO #3 – nhập 3 Bàn vào kho', 1, '2026-03-10'),
+    (1, 'OUT',  10,   3,   7, 'Manual',        NULL, N'Giao hàng cho Công ty ABC theo Bill #1', 1, '2026-03-12');
 GO
 
 -- ============================================================
 -- PHẦN 3: KIỂM TRA DỮ LIỆU ĐÃ INSERT
--- Chạy các lệnh này để xác nhận dữ liệu hợp lệ
 -- ============================================================
-SELECT 'Users'          AS TableName, COUNT(*) AS RowCount FROM Users          UNION ALL
-SELECT 'Item',                         COUNT(*)             FROM Item           UNION ALL
-SELECT 'Supplier',                     COUNT(*)             FROM Supplier       UNION ALL
-SELECT 'Customer',                     COUNT(*)             FROM Customer       UNION ALL
-SELECT 'Defect_Reason',                COUNT(*)             FROM Defect_Reason  UNION ALL
-SELECT 'Routing',                      COUNT(*)             FROM Routing        UNION ALL
-SELECT 'Routing_Step',                 COUNT(*)             FROM Routing_Step   UNION ALL
-SELECT 'Tenant',                       COUNT(*)             FROM Tenant         UNION ALL
-SELECT 'Purchase_Order',               COUNT(*)             FROM Purchase_Order UNION ALL
-SELECT 'BOM',                          COUNT(*)             FROM BOM            UNION ALL
-SELECT 'BOM_Detail',                   COUNT(*)             FROM BOM_Detail     UNION ALL
-SELECT 'Work_Order',                   COUNT(*)             FROM Work_Order     UNION ALL
-SELECT 'Production_Log',               COUNT(*)             FROM Production_Log UNION ALL
-SELECT 'QC_Inspection',                COUNT(*)             FROM QC_Inspection  UNION ALL
-SELECT 'Bill',                         COUNT(*)             FROM Bill           UNION ALL
-SELECT 'Payment',                      COUNT(*)             FROM Payment        UNION ALL
-SELECT 'InventoryLog',                 COUNT(*)             FROM InventoryLog;
+SELECT 'Users'          AS TableName, COUNT(*) AS RowCount FROM Users           UNION ALL
+SELECT 'Item',                         COUNT(*)             FROM Item            UNION ALL
+SELECT 'Supplier',                     COUNT(*)             FROM Supplier        UNION ALL
+SELECT 'Customer',                     COUNT(*)             FROM Customer        UNION ALL
+SELECT 'Defect_Reason',                COUNT(*)             FROM Defect_Reason   UNION ALL
+SELECT 'Routing',                      COUNT(*)             FROM Routing         UNION ALL
+SELECT 'Routing_Step',                 COUNT(*)             FROM Routing_Step    UNION ALL
+SELECT 'Tenant',                       COUNT(*)             FROM Tenant          UNION ALL
+SELECT 'SystemConfig',                 COUNT(*)             FROM SystemConfig    UNION ALL
+SELECT 'Purchase_Order',               COUNT(*)             FROM Purchase_Order  UNION ALL
+SELECT 'BOM',                          COUNT(*)             FROM BOM             UNION ALL
+SELECT 'BOM_Detail',                   COUNT(*)             FROM BOM_Detail      UNION ALL
+SELECT 'Work_Order',                   COUNT(*)             FROM Work_Order      UNION ALL
+SELECT 'Production_Log',               COUNT(*)             FROM Production_Log  UNION ALL
+SELECT 'QC_Inspection',                COUNT(*)             FROM QC_Inspection   UNION ALL
+SELECT 'Bill',                         COUNT(*)             FROM Bill            UNION ALL
+SELECT 'Bill_Line',                    COUNT(*)             FROM Bill_Line       UNION ALL
+SELECT 'Payment',                      COUNT(*)             FROM Payment         UNION ALL
+SELECT 'Inventory_Log',                COUNT(*)             FROM Inventory_Log;
 GO

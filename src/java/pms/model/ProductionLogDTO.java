@@ -52,7 +52,7 @@ public class ProductionLogDTO implements Serializable {
     public String getWorkerName() { return workerName; }
     public void setWorkerName(String workerName) { this.workerName = workerName; }
 
-    public int getQuantityDone() { return quantityDone; }
+    public int getQuantityDone() { return quantityDone > 0 ? quantityDone : producedQuantity; }
     public void setQuantityDone(int quantityDone) { this.quantityDone = quantityDone; }
 
     public int getQuantityDefective() { return quantityDefective; }

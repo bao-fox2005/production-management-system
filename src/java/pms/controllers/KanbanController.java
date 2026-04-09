@@ -18,11 +18,12 @@ import pms.utils.NotificationService;
 /**
  * KanbanController – Servlet hiển thị bảng Kanban theo trạng thái Work Order.
  *
- * Bảng Kanban chia Work Order thành 4 cột theo trạng thái:
- *   - New      : Bao gồm New, WaitMaterial, Ready
- *   - InProgress: Đang sản xuất
- *   - Done     : Hoàn thành (Done, Completed)
- *   - Cancelled: Đã hủy
+ * Bảng Kanban chia Work Order thành 5 cột theo trạng thái:
+ *   - New        : Mới tạo
+ *   - Ready      : Chờ sản xuất (đã đủ vật tư)
+ *   - InProgress : Đang sản xuất
+ *   - Done       : Hoàn thành (Done, Completed)
+ *   - Cancelled  : Đã hủy
  *
  * Chức năng:
  *   - view        : Hiển thị kanban với bộ lọc keyword và khoảng ngày
@@ -91,8 +92,9 @@ public class KanbanController extends HttpServlet {
         String fromDate = request.getParameter("fromDate");
         String toDate   = request.getParameter("toDate");
 
-        // Khởi tạo 4 danh sách cho 4 cột Kanban
+        // Khởi tạo 5 danh sách cho 5 cột Kanban
         List<WorkOrderDTO> newList        = new ArrayList<>();
+        List<WorkOrderDTO> readyList      = new ArrayList<>();
         List<WorkOrderDTO> inProgressList = new ArrayList<>();
         List<WorkOrderDTO> doneList       = new ArrayList<>();
         List<WorkOrderDTO> cancelledList  = new ArrayList<>();
@@ -182,9 +184,10 @@ public class KanbanController extends HttpServlet {
 
             // ---- Phân loại vào cột Kanban ----
             String status = wo.getStatus();
-            if ("New".equalsIgnoreCase(status) || "WaitMaterial".equalsIgnoreCase(status)
-                    || "Ready".equalsIgnoreCase(status)) {
-                newList.add(wo);          // Cột "Mới" – gồm cả chờ vật liệu và sẵn sàng
+            if ("New".equalsIgnoreCase(status) || "WaitMaterial".equalsIgnoreCase(status)) {
+                newList.add(wo);          // Cột "Mới"
+            } else if ("Ready".equalsIgnoreCase(status)) {
+                readyList.add(wo);        // Cột "Chờ SX" – đã đủ vật tư, sẵn sàng
             } else if ("InProgress".equalsIgnoreCase(status) || "In Progress".equalsIgnoreCase(status)) {
                 inProgressList.add(wo);  // Cột "Đang sản xuất"
             } else if ("Done".equalsIgnoreCase(status) || "Completed".equalsIgnoreCase(status)) {
@@ -196,6 +199,7 @@ public class KanbanController extends HttpServlet {
 
         // Đưa các danh sách và bộ lọc vào request để JSP hiển thị
         request.setAttribute("newList",        newList);
+        request.setAttribute("readyList",      readyList);
         request.setAttribute("inProgressList", inProgressList);
         request.setAttribute("doneList",       doneList);
         request.setAttribute("cancelledList",  cancelledList);

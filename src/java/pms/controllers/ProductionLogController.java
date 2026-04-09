@@ -71,14 +71,13 @@ public class ProductionLogController extends HttpServlet {
 
             if ("listLog".equals(action) || "list".equals(action)) {
                 // Hiển thị nhật ký sản xuất theo phân quyền
+                java.util.List<ProductionLogDTO> allLogs = dao.getAllLogs();
                 if (isAdmin) {
                     // Admin xem tất cả nhật ký của mọi công nhân
-                    request.setAttribute("listLogs", dao.getAllLogs());
+                    request.setAttribute("listLogs", allLogs);
 
                 } else if (isWorker) {
-                    // Worker chỉ xem nhật ký của chính mình
-                    // Lấy tất cả rồi lọc theo workerUserId trong Java
-                    java.util.List<ProductionLogDTO> allLogs = dao.getAllLogs();
+                    // Worker chỉ xem nhật ký của chính mình (trong bảng history)
                     java.util.List<ProductionLogDTO> workerLogs = new java.util.ArrayList<>();
                     for (ProductionLogDTO log : allLogs) {
                         if (log.getWorkerUserId() == currentUserId) { // Chỉ lấy log của mình
@@ -92,8 +91,27 @@ public class ProductionLogController extends HttpServlet {
                     request.setAttribute("listLogs", new java.util.ArrayList<>());
                 }
 
-                // Nạp dữ liệu tham chiếu cho form và dropdown
-                request.setAttribute("listWO",      woDao.getAllWorkOrders());     // Dropdown WO
+                // Lấy tất cả lệnh InProgress để hiển thị progress bar
+                java.util.List<pms.model.WorkOrderDTO> allWO = woDao.getAllWorkOrders();
+                java.util.List<pms.model.WorkOrderDTO> activeWOs = new java.util.ArrayList<>();
+                java.util.Map<Integer, Integer> woProgressMap = new java.util.HashMap<>();
+                for (pms.model.WorkOrderDTO wo : allWO) {
+                    if ("InProgress".equalsIgnoreCase(wo.getStatus())) {
+                        activeWOs.add(wo);
+                        int total = 0;
+                        for (ProductionLogDTO l : allLogs) {
+                            if (l.getWoId() == wo.getWo_id()) {
+                                int q = l.getProducedQuantity() > 0 ? l.getProducedQuantity() : l.getQuantityDone();
+                                total += q;
+                            }
+                        }
+                        woProgressMap.put(wo.getWo_id(), total);
+                    }
+                }
+                
+                request.setAttribute("activeWOs", activeWOs);
+                request.setAttribute("woProgressMap", woProgressMap);
+                request.setAttribute("listWO",      allWO);     // Dropdown WO
                 request.setAttribute("listSteps",   stepDao.getAllRoutingStep());  // Dropdown bước SX
                 request.setAttribute("listDefects", defectDao.getAllDefects());    // Dropdown lỗi
                 request.setAttribute("isAdmin",     isAdmin);   // JSP dùng để hiện/ẩn nút quản lý
@@ -103,10 +121,10 @@ public class ProductionLogController extends HttpServlet {
                 return;
             }
 
-            if ("addLog".equals(action)) {
+            if ("addLog".equals(action) || "reportProgress".equals(action)) {
                 // Chỉ worker mới được thêm nhật ký sản xuất
                 if (!isWorker) {
-                    response.sendRedirect("MainController?action=listLog");
+                    response.sendRedirect("ProductionLogController?action=listLog");
                     return;
                 }
 
@@ -123,6 +141,7 @@ public class ProductionLogController extends HttpServlet {
                 log.setStepId(stepId);
                 log.setWorkerUserId(currentUserId); // Lấy ID từ session (bảo mật hơn lấy từ form)
                 log.setQuantityDone(quantityDone);
+                log.setProducedQuantity(quantityDone); // Support for old fallback
                 log.setQuantityDefective(quantityDefective);
 
                 // defectId = 0 nghĩa là không có lỗi → set null thay vì 0
@@ -135,7 +154,18 @@ public class ProductionLogController extends HttpServlet {
                 log.setLogDate(new java.sql.Date(System.currentTimeMillis())); // Ngày báo cáo = hôm nay
                 dao.insertLog(log); // Lưu vào DB
 
-                response.sendRedirect("MainController?action=listLog"); // Redirect về danh sách
+                response.sendRedirect("ProductionLogController?action=listLog"); // Redirect về danh sách
+                return;
+            }
+            
+            if ("completeWorkOrder".equals(action)) {
+                if (!isWorker) {
+                    response.sendRedirect("ProductionLogController?action=listLog");
+                    return;
+                }
+                int woId = Integer.parseInt(request.getParameter("workOrderId"));
+                woDao.updateWorkOrderStatusOnly(woId, "Done");
+                response.sendRedirect("ProductionLogController?action=listLog");
                 return;
             }
 

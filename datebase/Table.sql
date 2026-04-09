@@ -128,6 +128,15 @@ CREATE TABLE Tenant (
     notes               NVARCHAR(500)
 );
 
+-- [SystemConfig] Cấu hình động cho SMTP / QR / tài khoản nhận tiền
+--   config_key: khóa cấu hình duy nhất để [`SystemConfigService.getConfig()`](src/java/pms/utils/SystemConfigService.java:36) truy xuất
+CREATE TABLE SystemConfig (
+    config_key    VARCHAR(100)    NOT NULL PRIMARY KEY,
+    config_value  NVARCHAR(MAX)   NULL,
+    description   NVARCHAR(255)   NULL,
+    updated_at    DATETIME        NOT NULL DEFAULT GETDATE()
+);
+
 -- ============================================================
 -- PHẦN 2: BẢNG GIAO DỊCH (có khóa ngoại)
 -- ============================================================
@@ -188,7 +197,7 @@ CREATE TABLE BOM_Detail (
 );
 
 -- [Work_Order] Lệnh sản xuất – yêu cầu sản xuất một lô hàng
---   status: 'New' → 'InProgress' → 'Done' | 'Cancelled'
+--   status: 'New' → 'Ready' (Chờ SX) → 'InProgress' (Đang SX) → 'Done' | 'Cancelled'
 --   start_date / due_date: kế hoạch; completed_date: thực tế hoàn thành
 CREATE TABLE Work_Order (
     wo_id              INT PRIMARY KEY IDENTITY(1,1),
@@ -196,7 +205,7 @@ CREATE TABLE Work_Order (
     routing_id         INT,
     order_quantity     INT,
     status             VARCHAR(20)   DEFAULT 'New'
-                           CHECK (status IN ('New', 'InProgress', 'Done', 'Cancelled')),
+                           CHECK (status IN ('New', 'Ready', 'InProgress', 'Done', 'Cancelled')),
     start_date         DATE,
     due_date           DATE,
     completed_date     DATE,
@@ -245,15 +254,36 @@ CREATE TABLE QC_Inspection (
 -- [Bill] Hóa đơn chốt đơn hàng
 --   Kết nối lệnh sản xuất với khách hàng đặt hàng
 --   total_amount: tổng tiền hóa đơn (VNĐ)
+--   status: trạng thái nghiệp vụ hiện được code dùng là 'pending' | 'paid' | 'cancelled'
 CREATE TABLE Bill (
-    bill_id       INT PRIMARY KEY IDENTITY(1,1),
-    wo_id         INT,
-    customer_id   INT,
-    total_amount  DECIMAL(18,2),
-    bill_date     DATE DEFAULT GETDATE(),
+    bill_id             INT PRIMARY KEY IDENTITY(1,1),
+    wo_id               INT,
+    customer_id         INT,
+    total_amount        DECIMAL(18,2),
+    bill_date           DATE            DEFAULT GETDATE(),
+    status              VARCHAR(20)     NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending', 'paid', 'cancelled')),
+    bill_created_at     DATETIME        NULL,
+    confirmed_paid_at   DATETIME        NULL,
+    cancelled_at        DATETIME        NULL,
     FOREIGN KEY (wo_id)        REFERENCES Work_Order(wo_id),
     FOREIGN KEY (customer_id)  REFERENCES Customer(customer_id)
 );
+
+-- [Bill_Line] Chi tiết dòng sản phẩm của hóa đơn
+--   Bảng này được [`BillLineDAO`](src/java/pms/model/BillLineDAO.java:10) sử dụng trực tiếp để lưu từng sản phẩm / báo giá trong hóa đơn
+CREATE TABLE Bill_Line (
+    line_id       INT PRIMARY KEY IDENTITY(1,1),
+    bill_id       INT             NOT NULL,
+    item_type     NVARCHAR(255)   NOT NULL,
+    quantity      INT             NOT NULL,
+    unit_price    DECIMAL(18,2)   NOT NULL,
+    line_total    DECIMAL(18,2)   NOT NULL,
+    created_at    DATETIME        NOT NULL DEFAULT GETDATE(),
+    FOREIGN KEY (bill_id) REFERENCES Bill(bill_id)
+);
+
+CREATE INDEX IX_BillLine_BillId ON Bill_Line(bill_id);
 
 -- [Payment] Thanh toán QR/Chuyển khoản cho hóa đơn
 --   payment_method: 'QR' | 'BankTransfer' | 'Cash'
@@ -281,23 +311,24 @@ CREATE TABLE Payment (
     FOREIGN KEY (bill_id) REFERENCES Bill(bill_id)
 );
 
--- [InventoryLog] Lịch sử xuất/nhập kho
---   QcInspectionDAO và InventoryLogDAO tự tạo bảng này nếu chưa có
+-- [Inventory_Log] Lịch sử xuất/nhập kho
+--   Schema này khớp trực tiếp với [`InventoryLogDAO`](src/java/pms/model/InventoryLogDAO.java:12)
 --   change_type: 'IN' (nhập kho) | 'OUT' (xuất kho)
---   quantity_change: số lượng thay đổi (luôn dương; dấu hiệu xác định bởi change_type)
---   reference_type: loại giao dịch gốc gây ra thay đổi (WorkOrder, PurchaseOrder, Manual...)
-CREATE TABLE InventoryLog (
-    log_id          INT PRIMARY KEY IDENTITY(1,1),
-    item_id         INT            NOT NULL,
-    change_type     VARCHAR(10)    NOT NULL CHECK (change_type IN ('IN', 'OUT')),
-    quantity_change INT            NOT NULL,
-    reference_type  NVARCHAR(50),
-    reference_id    INT,
-    notes           NVARCHAR(300),
-    changed_by      INT,
-    changed_at      DATETIME       DEFAULT GETDATE(),
-    FOREIGN KEY (item_id)    REFERENCES Item(item_id),
-    FOREIGN KEY (changed_by) REFERENCES Users(user_id)
+--   quantity_before / quantity_after: hỗ trợ log chênh lệch tồn kho trước-sau
+CREATE TABLE Inventory_Log (
+    log_id            INT PRIMARY KEY IDENTITY(1,1),
+    item_id           INT            NOT NULL,
+    change_type       VARCHAR(10)    NOT NULL CHECK (change_type IN ('IN', 'OUT')),
+    quantity_before   INT            NULL,
+    quantity_change   INT            NOT NULL,
+    quantity_after    INT            NULL,
+    reference_type    NVARCHAR(50)   NULL,
+    reference_id      INT            NULL,
+    reason            NVARCHAR(300)  NULL,
+    performed_by      INT            NULL,
+    log_date          DATE           NOT NULL DEFAULT GETDATE(),
+    FOREIGN KEY (item_id)      REFERENCES Item(item_id),
+    FOREIGN KEY (performed_by) REFERENCES Users(user_id)
 );
 
 -- [EncryptedFile] File đính kèm được mã hóa bằng mật khẩu

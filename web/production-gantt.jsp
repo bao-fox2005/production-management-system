@@ -1,4 +1,4 @@
-<%@page contentType="text/html" pageEncoding="UTF-8" import="java.util.List, java.util.ArrayList, pms.model.WorkOrderDTO, pms.model.UserDTO, java.text.SimpleDateFormat"%>
+<%@page contentType="text/html" pageEncoding="UTF-8" import="java.util.List, java.util.ArrayList, pms.model.WorkOrderDTO, pms.model.ItemDTO, pms.model.RoutingDTO, pms.model.UserDTO, java.text.SimpleDateFormat"%>
 <%
     List<WorkOrderDTO> workOrders = (List<WorkOrderDTO>) request.getAttribute("workOrders");
     UserDTO user = (UserDTO) session.getAttribute("user");
@@ -272,6 +272,7 @@
                                     <th class="w-72 bg-slate-50 px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Sản phẩm</th>
                                     <th class="w-28 bg-slate-50 px-6 py-4 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Số lượng</th>
                                     <th class="bg-slate-50 px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Tiến độ dự kiến</th>
+                                    <th class="w-28 bg-slate-50 px-6 py-4 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Hành động</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -344,6 +345,22 @@
                                             </div>
                                         </div>
                                     </td>
+                                    <td class="bg-white px-6 py-4 text-center dark:bg-slate-900/40">
+                                        <button type="button"
+                                                class="rounded-xl p-2.5 text-slate-500 transition-colors hover:bg-blue-100 hover:text-blue-600 dark:text-slate-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                                                title="Xem chi tiết"
+                                                data-detail-wo-id="<%= wo.getWo_id() %>"
+                                                data-detail-product-name="<%= wo.getProductName() != null ? wo.getProductName() : "SP#" + wo.getProduct_item_id() %>"
+                                                data-detail-routing-name="<%= wo.getRoutingName() != null ? wo.getRoutingName() : "-" %>"
+                                                data-detail-quantity="<%= wo.getOrder_quantity() %>"
+                                                data-detail-status="<%= wo.getStatus() != null ? wo.getStatus() : "New" %>"
+                                                data-detail-start-date="<%= wo.getStart_date() != null ? wo.getStart_date().substring(0, Math.min(16, wo.getStart_date().length())) : "-" %>"
+                                                data-detail-due-date="<%= wo.getDue_date() != null ? wo.getDue_date().substring(0, Math.min(16, wo.getDue_date().length())) : "-" %>"
+                                                data-detail-notes="<%= wo.getNotes() != null ? wo.getNotes() : "" %>"
+                                                onclick="openGanttDetailModal(this)">
+                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        </button>
+                                    </td>
                                 </tr>
                                 <% } %>
                             </tbody>
@@ -354,5 +371,114 @@
             </main>
         </div>
     </div>
+
+    <!-- Modal Chi tiết lệnh sản xuất -->
+    <div id="ganttDetailModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+        <div class="section-card max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-slate-200 shadow-2xl dark:border-slate-700">
+            <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5 dark:border-slate-700">
+                <div><h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Chi tiết lệnh sản xuất</h3></div>
+                <button type="button" onclick="closeGanttDetailModal()" class="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="grid gap-5 p-6 sm:grid-cols-2">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Mã lệnh</p>
+                    <p id="gDetailWoId" class="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100"></p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Trạng thái</p>
+                    <p id="gDetailStatus" class="mt-2"><span id="gDetailStatusBadge" class="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold"></span></p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Sản phẩm</p>
+                    <p id="gDetailProductName" class="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100"></p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Quy trình</p>
+                    <p id="gDetailRoutingName" class="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100"></p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Số lượng</p>
+                    <p id="gDetailQuantity" class="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100"></p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Thời gian dự kiến</p>
+                    <p id="gDetailEstTime" class="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100"></p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Ngày bắt đầu</p>
+                    <p id="gDetailStartDate" class="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100"></p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Hạn chót</p>
+                    <p id="gDetailDueDate" class="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100"></p>
+                </div>
+                <div class="sm:col-span-2" id="gDetailNotesSection" style="display:none">
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Ghi chú</p>
+                    <p id="gDetailNotes" class="mt-2 text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-3"></p>
+                </div>
+            </div>
+            <div class="flex justify-end border-t border-slate-200 px-6 py-5 dark:border-slate-700">
+                <button type="button" onclick="closeGanttDetailModal()" class="rounded-2xl border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openGanttDetailModal(btn) {
+            if (!btn) return;
+            var woId = btn.getAttribute('data-detail-wo-id');
+            var productName = btn.getAttribute('data-detail-product-name');
+            var routingName = btn.getAttribute('data-detail-routing-name');
+            var quantity = btn.getAttribute('data-detail-quantity');
+            var status = btn.getAttribute('data-detail-status');
+            var startDate = btn.getAttribute('data-detail-start-date');
+            var dueDate = btn.getAttribute('data-detail-due-date');
+            var notes = btn.getAttribute('data-detail-notes');
+
+            document.getElementById('gDetailWoId').textContent = '#WO-' + woId;
+            document.getElementById('gDetailProductName').textContent = productName || '-';
+            document.getElementById('gDetailRoutingName').textContent = routingName || '-';
+            document.getElementById('gDetailQuantity').textContent = quantity || '0';
+            document.getElementById('gDetailEstTime').textContent = (parseInt(quantity) * 30) + ' phút';
+            document.getElementById('gDetailStartDate').textContent = startDate || 'Chưa xác định';
+            document.getElementById('gDetailDueDate').textContent = dueDate || 'Chưa xác định';
+
+            // Status badge
+            var badge = document.getElementById('gDetailStatusBadge');
+            var statusText = status;
+            var badgeCss = 'bg-slate-100 text-slate-600';
+            if (status === 'New') { statusText = 'Mới'; badgeCss = 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'; }
+            else if (status === 'Ready') { statusText = 'Chờ SX'; badgeCss = 'bg-sky-100 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300'; }
+            else if (status === 'InProgress' || status === 'In Progress') { statusText = 'Đang Sản Xuất'; badgeCss = 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'; }
+            else if (status === 'Done' || status === 'Completed') { statusText = 'Hoàn Thành'; badgeCss = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'; }
+            else if (status === 'Cancelled') { statusText = 'Đã Hủy'; badgeCss = 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300'; }
+            badge.className = 'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ' + badgeCss;
+            badge.textContent = statusText;
+
+            // Notes
+            var notesSection = document.getElementById('gDetailNotesSection');
+            if (notes && notes.trim() !== '') {
+                notesSection.style.display = '';
+                document.getElementById('gDetailNotes').textContent = notes;
+            } else {
+                notesSection.style.display = 'none';
+            }
+
+            document.getElementById('ganttDetailModal').classList.remove('hidden');
+            document.getElementById('ganttDetailModal').classList.add('flex');
+        }
+
+        function closeGanttDetailModal() {
+            document.getElementById('ganttDetailModal').classList.add('hidden');
+            document.getElementById('ganttDetailModal').classList.remove('flex');
+        }
+
+        // Click outside modal to close
+        document.getElementById('ganttDetailModal').addEventListener('click', function(e) {
+            if (e.target === this) closeGanttDetailModal();
+        });
+    </script>
 </body>
 </html>

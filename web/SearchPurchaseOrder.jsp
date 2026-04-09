@@ -399,7 +399,8 @@
                     <select id="itemId" name="itemId" required class="form-input">
                         <option value="">-- Chọn vật tư --</option>
                         <% for (ItemDTO i : listItems) {
-                            if ("VatTu".equalsIgnoreCase(i.getItemType())) { %>
+                            String type = i.getItemType();
+                            if (type == null || !type.trim().equalsIgnoreCase("SanPham")) { %>
                         <option value="<%= i.getItemID() %>"><%= i.getItemName() %> (<%= i.getStockQuantity() %> tồn kho)</option>
                         <%  }
                            } %>

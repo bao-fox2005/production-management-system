@@ -81,7 +81,7 @@ public class WorkOrderDTO implements Serializable {
         if (status == null) return "Unknown";
         if (status.equalsIgnoreCase("New")) return "Mới";
         if (status.equalsIgnoreCase("WaitMaterial")) return "Chờ vật tư";
-        if (status.equalsIgnoreCase("Ready")) return "Sẵn sàng";
+        if (status.equalsIgnoreCase("Ready")) return "Chờ SX";
         if (status.equalsIgnoreCase("InProgress") || status.equalsIgnoreCase("In Progress")) return "Đang Sản Xuất";
         if (status.equalsIgnoreCase("Done") || status.equalsIgnoreCase("Completed")) return "Hoàn Thành";
         if (status.equalsIgnoreCase("Cancelled")) return "Đã Hủy";

@@ -135,12 +135,14 @@
                         <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Kiểm tra chất lượng</h1>
                         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Ghi nhận, theo dõi và đánh giá kết quả kiểm tra chất lượng theo từng lệnh sản xuất</p>
                     </div>
+                    <% if (!isAdmin) { %>
                     <button type="button" onclick="openQcModal()" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white shadow-sm shadow-teal-500/30 transition-all hover:bg-teal-700 sm:w-auto sm:self-start xl:flex-shrink-0">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                         </svg>
                         Tạo kiểm tra
                     </button>
+                    <% } %>
                 </div>
 
                 <!-- Alerts -->
@@ -218,6 +220,10 @@
                             &#10006; Lỗi
                         </a>
                     </div>
+                    <div class="relative">
+                        <input type="text" id="qcSearchInput" onkeyup="filterQcTable()" placeholder="Tìm kiếm phiếu kiểm tra..." class="pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:border-teal-500 transition-colors w-full sm:w-64">
+                        <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
                 </div>
 
                 <!-- Inspections Table -->
@@ -236,7 +242,7 @@
                                     <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ghi chú</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="qcTableBody">
                                 <% 
                                 List<QcInspectionDTO> filteredList = inspections;
                                 if ("passed".equals(filterStatus)) {
@@ -371,23 +377,15 @@
                     </div>
                 </div>
 
-                <div>
-                    <label class="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-200">Kết quả kiểm tra <span class="text-red-500">*</span></label>
-                    <div class="flex flex-col gap-3 sm:flex-row">
-                        <label id="qcPassLabel" class="flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-slate-200 px-5 py-3 transition-all hover:border-emerald-300 dark:border-slate-700">
-                            <input type="radio" name="inspectionResult" value="PASS" required class="h-5 w-5 text-emerald-600" onchange="toggleQcResult()">
-                            <span class="flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                Đạt (PASS)
-                            </span>
+                <div class="mb-5 flex items-start gap-3 rounded-2xl bg-teal-50 p-4 dark:bg-teal-900/20 border border-teal-100 dark:border-teal-800">
+                    <div class="flex h-6 items-center">
+                        <input id="confirmQc" type="checkbox" required class="h-5 w-5 rounded border-teal-300 text-teal-600 focus:ring-teal-600 dark:border-teal-600 dark:bg-slate-800 dark:ring-offset-slate-900">
+                    </div>
+                    <div class="text-sm">
+                        <label for="confirmQc" class="font-bold text-teal-900 dark:text-teal-100 cursor-pointer">
+                            Xác nhận đã kiểm tra
                         </label>
-                        <label id="qcFailLabel" class="flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-slate-200 px-5 py-3 transition-all hover:border-rose-300 dark:border-slate-700">
-                            <input type="radio" name="inspectionResult" value="FAIL" class="h-5 w-5 text-rose-600" onchange="toggleQcResult()">
-                            <span class="flex items-center gap-2 font-semibold text-rose-700 dark:text-rose-300">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                Lỗi (FAIL)
-                            </span>
-                        </label>
+                        <p class="text-teal-700 dark:text-teal-300 mt-1">Tôi xác nhận số liệu kiểm tra trên là chính xác và số lượng lỗi được ghi chú đầy đủ.</p>
                     </div>
                 </div>
 
@@ -411,7 +409,7 @@
 
                 <div class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 dark:border-slate-700 sm:flex-row sm:justify-end">
                     <button type="button" onclick="closeQcModal()" class="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Đóng</button>
-                    <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white shadow-sm shadow-teal-500/30 transition-all hover:bg-teal-700">Lưu kết quả</button>
+                    <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white shadow-sm shadow-teal-500/30 transition-all hover:bg-teal-700">Đã xác nhận kiểm tra</button>
                 </div>
             </form>
         </div>
@@ -434,30 +432,16 @@
             const total = parseInt(document.getElementById('qcQuantityInspected').value) || 0;
             const passed = parseInt(document.getElementById('qcQuantityPassed').value) || 0;
             const failed = Math.max(0, total - passed);
+            
             document.getElementById('qcQuantityFailed').value = failed;
             document.getElementById('qcPassRate').textContent = total > 0 ? (((passed / total) * 100).toFixed(1) + '% đạt') : '';
             document.getElementById('qcFailRate').textContent = total > 0 ? (((failed / total) * 100).toFixed(1) + '% lỗi') : '';
-        }
-
-        function toggleQcResult() {
-            const passRadio = document.querySelector('input[name="inspectionResult"][value="PASS"]');
-            const failRadio = document.querySelector('input[name="inspectionResult"][value="FAIL"]');
-            const passLabel = document.getElementById('qcPassLabel');
-            const failLabel = document.getElementById('qcFailLabel');
+            
             const defectSection = document.getElementById('qcDefectSection');
-
-            if (passRadio.checked) {
-                passLabel.classList.add('border-emerald-500', 'bg-emerald-50', 'dark:bg-emerald-500/10');
-                passLabel.classList.remove('border-slate-200', 'dark:border-slate-700');
-                failLabel.classList.remove('border-rose-500', 'bg-rose-50', 'dark:bg-rose-500/10');
-                failLabel.classList.add('border-slate-200', 'dark:border-slate-700');
-                defectSection.classList.add('hidden');
-            } else if (failRadio.checked) {
-                failLabel.classList.add('border-rose-500', 'bg-rose-50', 'dark:bg-rose-500/10');
-                failLabel.classList.remove('border-slate-200', 'dark:border-slate-700');
-                passLabel.classList.remove('border-emerald-500', 'bg-emerald-50', 'dark:bg-emerald-500/10');
-                passLabel.classList.add('border-slate-200', 'dark:border-slate-700');
+            if (failed > 0) {
                 defectSection.classList.remove('hidden');
+            } else {
+                defectSection.classList.add('hidden');
             }
         }
 
@@ -476,6 +460,24 @@
                 closeQcModal();
             }
         });
+
+        function filterQcTable() {
+            var input, filter, table, tr, td, i, txtValue;
+            input = document.getElementById("qcSearchInput");
+            filter = input.value.toUpperCase();
+            table = document.getElementById("qcTableBody");
+            tr = table.getElementsByTagName("tr");
+            for (i = 0; i < tr.length; i++) {
+                if (tr[i].getElementsByTagName("td").length > 0) {
+                    txtValue = tr[i].textContent || tr[i].innerText;
+                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                        tr[i].style.display = "";
+                    } else {
+                        tr[i].style.display = "none";
+                    }
+                }
+            }
+        }
     </script>
 </body>
 </html>

@@ -222,11 +222,9 @@ public class QcController extends HttpServlet {
                 return;
             }
 
-            // Validate: phải có kết quả (PASS/FAIL)
+            // Tự động xác định kết quả dựa trên số lượng lỗi
             if (result == null || result.trim().isEmpty()) {
-                response.sendRedirect(request.getContextPath() + "/QcController?action=list&error="
-                        + java.net.URLEncoder.encode("Bạn chưa chọn kết quả kiểm tra", "UTF-8"));
-                return;
+                result = (failed > 0) ? "FAIL" : "PASS";
             }
 
             // Nếu FAIL và có defectId → thêm tên nguyên nhân vào notes

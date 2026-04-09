@@ -54,7 +54,7 @@ public class UserDTO {
     }
 
     public String getRole() {
-        return role;
+        return role != null ? role.trim() : null;
     }
 
     public void setRole(String role) {

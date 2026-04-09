@@ -75,6 +75,20 @@ public class WorkOrderDAO {
         return false;
     }
 
+    // Chỉ cập nhật notes, không đổi status (tránh vi phạm CHECK constraint)
+    public boolean updateNotesOnly(int woId, String notes) {
+        String sql = "UPDATE Work_Order SET notes = ? WHERE wo_id = ?";
+        try (Connection conn = DBUtils.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, notes);
+            ps.setInt(2, woId);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
     public boolean insertWorkOrder(WorkOrderDTO wo) {
         String sql = "INSERT INTO Work_Order(product_item_id, routing_id, order_quantity, status, start_date, due_date) VALUES(?, ?, ?, ?, ?, ?)";
         try (Connection conn = DBUtils.getConnection();

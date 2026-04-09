@@ -54,14 +54,14 @@
             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
             Lệnh sản xuất
         </a>
+        <a href="WorkOrderController?action=calendar" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= "calendar".equals(activePage) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            Lịch sản xuất
+        </a>
         <% if (isAdmin) { %>
         <a href="KanbanController" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= "kanban".equals(activePage) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
             <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"/></svg>
             Bảng tiến độ
-        </a>
-        <a href="WorkOrderController?action=calendar" class="flex items-center gap-3 px-3 py-2.5 rounded-xl <%= "calendar".equals(activePage) ? "bg-teal-500/20 text-teal-300 font-semibold shadow-inner shadow-teal-900/30 ring-1 ring-teal-400/20" : "text-slate-300 hover:bg-slate-800/90 hover:text-white" %> transition-all duration-200">
-            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            Lịch sản xuất
         </a>
         <% } %>
         <% } %>

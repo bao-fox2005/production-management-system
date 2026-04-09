@@ -141,7 +141,8 @@ public class AuthenticationFilter implements Filter {
             return "listWorkOrder".equals(action)
                     || "listPurchaseOrder".equals(action)
                     || "searchPurchaseOrder".equals(action)
-                    || "addPurchaseOrder".equals(action);
+                    || "addPurchaseOrder".equals(action)
+                    || "listLog".equals(action);
         }
 
         return false;

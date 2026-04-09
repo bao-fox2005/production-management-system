@@ -83,12 +83,14 @@
     boolean isDarkMode = sessionDark != null ? sessionDark : false;
     
     int totalWO = workOrders.size();
-    int newCount = 0, inProgressCount = 0, completedCount = 0;
+    int newCount = 0, readyCount = 0, inProgressCount = 0, completedCount = 0, cancelledCount = 0;
     for (WorkOrderDTO w : workOrders) {
         if (w.getStatus() != null) {
             if (w.getStatus().equalsIgnoreCase("New")) newCount++;
+            else if (w.getStatus().equalsIgnoreCase("Ready")) readyCount++;
             else if (w.getStatus().equalsIgnoreCase("In Progress") || w.getStatus().equalsIgnoreCase("InProgress")) inProgressCount++;
             else if (w.getStatus().equalsIgnoreCase("Completed") || w.getStatus().equalsIgnoreCase("Done")) completedCount++;
+            else if (w.getStatus().equalsIgnoreCase("Cancelled")) cancelledCount++;
         }
     }
 %>
@@ -112,7 +114,6 @@
     String getStatusClass(String status) {
         if (status == null) return "bg-slate-100 text-slate-600 dark:bg-slate-700/70 dark:text-slate-300";
         if (status.equalsIgnoreCase("New")) return "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300";
-        if (status.equalsIgnoreCase("WaitMaterial")) return "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300";
         if (status.equalsIgnoreCase("Ready")) return "bg-sky-100 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300";
         if (status.equalsIgnoreCase("In Progress") || status.equalsIgnoreCase("InProgress")) return "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300";
         if (status.equalsIgnoreCase("Completed") || status.equalsIgnoreCase("Done")) return "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300";
@@ -123,8 +124,7 @@
     String getStatusLabel(String status) {
         if (status == null) return "N/A";
         if (status.equalsIgnoreCase("New")) return "Mới";
-        if (status.equalsIgnoreCase("WaitMaterial")) return "Chờ vật tư";
-        if (status.equalsIgnoreCase("Ready")) return "Sẵn sàng SX";
+        if (status.equalsIgnoreCase("Ready")) return "Chờ SX";
         if (status.equalsIgnoreCase("In Progress") || status.equalsIgnoreCase("InProgress")) return "Đang SX";
         if (status.equalsIgnoreCase("Completed") || status.equalsIgnoreCase("Done")) return "Hoàn Thành";
         if (status.equalsIgnoreCase("Cancelled")) return "Đã Hủy";
@@ -232,48 +232,76 @@
                 </div>
                 <% } %>
 
-                <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                    <!-- Tổng lệnh -->
+                    <div class="kpi-card rounded-2xl border border-slate-200 border-t-4 border-t-indigo-500 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">Tổng lệnh</p>
+                                <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100"><%= totalWO %></p>
+                            </div>
+                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Mới -->
                     <div class="kpi-card rounded-2xl border border-slate-200 border-t-4 border-t-blue-500 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                        <div class="flex items-start justify-between gap-4">
+                        <div class="flex items-start justify-between gap-3">
                             <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Tổng lệnh</p>
-                                <p class="mt-3 text-3xl font-bold text-slate-900 dark:text-slate-100"><%= totalWO %></p>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">Mới</p>
+                                <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100"><%= newCount %></p>
                             </div>
-                            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
-                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                             </div>
                         </div>
                     </div>
+                    <!-- Chờ SX -->
                     <div class="kpi-card rounded-2xl border border-slate-200 border-t-4 border-t-sky-500 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                        <div class="flex items-start justify-between gap-4">
+                        <div class="flex items-start justify-between gap-3">
                             <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Mới</p>
-                                <p class="mt-3 text-3xl font-bold text-slate-900 dark:text-slate-100"><%= newCount %></p>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">Chờ SX</p>
+                                <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100"><%= readyCount %></p>
                             </div>
-                            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300">
-                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-300">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
                             </div>
                         </div>
                     </div>
+                    <!-- Đang SX -->
                     <div class="kpi-card rounded-2xl border border-slate-200 border-t-4 border-t-amber-500 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                        <div class="flex items-start justify-between gap-4">
+                        <div class="flex items-start justify-between gap-3">
                             <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Đang sản xuất</p>
-                                <p class="mt-3 text-3xl font-bold text-slate-900 dark:text-slate-100"><%= inProgressCount %></p>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">Đang SX</p>
+                                <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100"><%= inProgressCount %></p>
                             </div>
-                            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">
-                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             </div>
                         </div>
                     </div>
+                    <!-- Hoàn thành -->
                     <div class="kpi-card rounded-2xl border border-slate-200 border-t-4 border-t-emerald-500 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                        <div class="flex items-start justify-between gap-4">
+                        <div class="flex items-start justify-between gap-3">
                             <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Hoàn thành</p>
-                                <p class="mt-3 text-3xl font-bold text-slate-900 dark:text-slate-100"><%= completedCount %></p>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">Hoàn thành</p>
+                                <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100"><%= completedCount %></p>
                             </div>
-                            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
-                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Đã hủy -->
+                    <div class="kpi-card rounded-2xl border border-slate-200 border-t-4 border-t-red-500 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">Đã hủy</p>
+                                <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-slate-100"><%= cancelledCount %></p>
+                            </div>
+                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
                             </div>
                         </div>
                     </div>
@@ -302,10 +330,10 @@
                         <select name="status" class="form-input">
                             <option value="">Tất cả trạng thái</option>
                             <option value="New" <%= "New".equals(filterStatus) ? "selected" : "" %>>Mới</option>
-                            <option value="WaitMaterial" <%= "WaitMaterial".equals(filterStatus) ? "selected" : "" %>>Chờ vật tư</option>
-                            <option value="Ready" <%= "Ready".equals(filterStatus) ? "selected" : "" %>>Sẵn sàng SX</option>
+                            <option value="Ready" <%= "Ready".equals(filterStatus) ? "selected" : "" %>>Chờ SX</option>
                             <option value="In Progress" <%= "In Progress".equals(filterStatus) ? "selected" : "" %>>Đang sản xuất</option>
-                            <option value="Completed" <%= "Completed".equals(filterStatus) ? "selected" : "" %>>Hoàn thành</option>
+                            <option value="Done" <%= "Done".equals(filterStatus) ? "selected" : "" %>>Hoàn thành</option>
+                            <option value="Cancelled" <%= "Cancelled".equals(filterStatus) ? "selected" : "" %>>Đã hủy</option>
                         </select>
                         <button type="submit" class="rounded-2xl bg-teal-600 px-6 py-3 text-sm font-semibold text-white shadow-sm shadow-teal-500/30 transition-all hover:bg-teal-700">Lọc dữ liệu</button>
                     </form>
@@ -369,7 +397,7 @@
                                                 <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold <%= getStatusClass(w.getStatus()) %>">
                                                     <%= getStatusLabel(w.getStatus()) %>
                                                 </span>
-                                                <% if ("WaitMaterial".equalsIgnoreCase(w.getStatus()) && w.getNotes() != null && !w.getNotes().isEmpty()) { %>
+                                                <% if ("New".equalsIgnoreCase(w.getStatus()) && w.getNotes() != null && w.getNotes().startsWith("Thiếu")) { %>
                                                     <span class="text-[11px] font-medium text-rose-600 dark:text-rose-400 max-w-[150px] leading-tight text-center">
                                                         <%= w.getNotes() %>
                                                     </span>
@@ -380,7 +408,7 @@
                                             <div class="flex items-center justify-center gap-2">
                                                 
                                                 <% if (isAdmin) { %>
-                                                    <% if ("New".equalsIgnoreCase(w.getStatus()) || "WaitMaterial".equalsIgnoreCase(w.getStatus())) { %>
+                                                    <% if ("New".equalsIgnoreCase(w.getStatus())) { %>
                                                         <form action="WorkOrderController" method="post" class="inline-block m-0 p-0" style="margin-right: 4px;">
                                                             <input type="hidden" name="action" value="checkMaterials">
                                                             <input type="hidden" name="wo_id" value="<%= w.getWo_id() %>">
@@ -394,17 +422,18 @@
                                                         </form>
                                                     <% } %>
 
-                                                    <% if ("WaitMaterial".equalsIgnoreCase(w.getStatus())) { %>
-                                                        <a href="PurchaseOrderController" 
+                                                    <%-- Icon giỏ hàng: hiện khi status=New và notes có thông tin thiếu vật tư --%>
+                                                    <% if ("New".equalsIgnoreCase(w.getStatus()) && w.getNotes() != null && w.getNotes().startsWith("Thiếu")) { %>
+                                                        <a href="MainController?action=listPurchaseOrder&from_wo_id=<%= w.getWo_id() %>" 
                                                            class="flex items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700 dark:bg-rose-500/10 dark:text-rose-400"
-                                                           title="Đi tới Nhập vật tư" style="margin-right: 4px;">
+                                                           title="Tạo đơn nhập vật tư thiếu" style="margin-right: 4px;">
                                                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                                                         </a>
                                                     <% } %>
                                                     
                                                     <%
                                                         String st = w.getStatus() != null ? w.getStatus() : "";
-                                                        boolean canEditOrDelete = "New".equalsIgnoreCase(st) || "WaitMaterial".equalsIgnoreCase(st) || "Ready".equalsIgnoreCase(st);
+                                                        boolean canEditOrDelete = "New".equalsIgnoreCase(st) || "Ready".equalsIgnoreCase(st);
                                                         if (canEditOrDelete) {
                                                     %>
                                                     <button type="button"
@@ -718,7 +747,7 @@
             document.getElementById('edit_status_hidden').value = status || 'New';
             let statusText = 'Mới';
             if (status === 'WaitMaterial') statusText = 'Chờ vật tư';
-            else if (status === 'Ready') statusText = 'Sẵn sàng';
+            else if (status === 'Ready') statusText = 'Chờ SX';
             else if (status === 'In Progress' || status === 'InProgress') statusText = 'Đang sản xuất';
             else if (status === 'Done' || status === 'Completed') statusText = 'Hoàn thành';
             else if (status === 'Cancelled') statusText = 'Đã hủy';
