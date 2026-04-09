@@ -87,9 +87,8 @@ public class MainController extends HttpServlet {
         } else if (action.contains("Customer")) {
             url = "CustomerController";       // Quản lý khách hàng
 
-        } else if (action.contains("Production") || action.contains("listLog")) {
-            url = "ProductionLogController";  // Quản lý nhật ký sản xuất
-
+        } else if (action.contains("Production") || action.contains("Tracking") || action.contains("listLog") || action.contains("addLog") || action.contains("Qc") || action.contains("addQc")) {
+            url = "ProductionTrackingController";  // Quản lý nhật ký sản xuất và QC
         } else if (action.contains("WorkOrder")) {
             url = "WorkOrderController";      // Quản lý lệnh sản xuất
 

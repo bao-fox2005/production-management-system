@@ -126,6 +126,7 @@ public class AuthenticationFilter implements Filter {
         if ("/DashboardController".equals(path)
                 || "/WorkOrderController".equals(path)
                 || "/ProductionLogController".equals(path)
+                || "/ProductionTrackingController".equals(path)
                 || "/QcController".equals(path)
                 || "/KanbanController".equals(path)
                 || "/PurchaseOrderController".equals(path)

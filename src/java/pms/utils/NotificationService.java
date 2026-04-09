@@ -198,7 +198,7 @@ public class NotificationService implements Serializable {
                 TYPE_DEFECT,
                 "Phát hiện lỗi QC",
                 "WO#" + safeText(woId) + " có kết quả QC không đạt: " + safeText(defectReason) + ".",
-                "QcController?action=list"
+                "ProductionTrackingController?action=list&tab=qc"
         );
         pushToAdmins(notification);
         sendDefectEmailToAdmins(woId, defectReason);

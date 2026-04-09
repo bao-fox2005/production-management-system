@@ -456,27 +456,46 @@ function openDayDetail(dateKey) {
                       : wo.status.toLowerCase().includes('cancel') ? 'cancelled' : 'new';
 
             let dateLines = '';
-            if (wo.created)   dateLines += `<span class="text-xs text-slate-500 dark:text-slate-400">📅 Tạo: <b>${wo.created}</b></span> `;
-            if (wo.start)     dateLines += `<span class="text-xs text-slate-500 dark:text-slate-400">🚀 Bắt đầu: <b>${wo.start}</b></span> `;
-            if (wo.due)       dateLines += `<span class="text-xs text-slate-500 dark:text-slate-400">⏰ Hạn: <b>${wo.due}</b></span> `;
-            if (wo.completed) dateLines += `<span class="text-xs text-emerald-600 dark:text-emerald-400">✅ Hoàn thành: <b>${wo.completed}</b></span> `;
+            if (wo.created)   dateLines += `<span class="text-xs text-slate-500 dark:text-slate-400">📅 Tạo: <b>\${wo.created}</b></span> `;
+            if (wo.start)     dateLines += `<span class="text-xs text-slate-500 dark:text-slate-400">🚀 Bắt đầu: <b>\${wo.start}</b></span> `;
+            if (wo.due)       dateLines += `<span class="text-xs text-slate-500 dark:text-slate-400">⏰ Hạn: <b>\${wo.due}</b></span> `;
+            if (wo.completed) dateLines += `<span class="text-xs text-emerald-600 dark:text-emerald-400">✅ Hoàn thành: <b>\${wo.completed}</b></span> `;
 
-            return `<div class="wo-modal-row ${cls}">
-                <div class="flex items-start justify-between gap-3">
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <span class="text-sm font-bold text-slate-900 dark:text-slate-100">#${wo.id}</span>
-                            <span class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">${wo.product}</span>
-                            <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${wo.badgeClass}">${wo.statusLabel}</span>
-                        </div>
-                        <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">SL: <b>${wo.qty}</b>${wo.customer ? ' · KH: <b>' + wo.customer + '</b>' : ''}</div>
-                        <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1">${dateLines}</div>
+            const isCompleted = wo.status.toLowerCase().includes('done') || wo.status.toLowerCase().includes('complete');
+            const displayStatus = wo.status; // Using raw status like "New", "In Progress"
+
+            return `<div class="mb-4 rounded-xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-800">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Mã Lệnh</p>
+                        <p class="text-sm font-bold text-slate-800 dark:text-slate-200">#WO-\${wo.id}</p>
                     </div>
-                    <a href="MainController?action=listWorkOrder&search=${wo.id}"
-                       onclick="event.stopPropagation()"
-                       class="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 transition-colors">
-                        Xem lệnh
-                    </a>
+                    <div>
+                        <p class="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Trạng Thái</p>
+                        <p class="text-sm font-semibold text-slate-800 dark:text-slate-200">\${displayStatus}</p>
+                    </div>
+                    <div>
+                        <p class="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Sản Phẩm</p>
+                        <p class="text-sm font-semibold text-slate-800 dark:text-slate-200">\${wo.product}</p>
+                    </div>
+                    <div>
+                        <p class="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Số Lượng</p>
+                        <p class="text-sm font-semibold text-slate-800 dark:text-slate-200">\${wo.qty}</p>
+                    </div>
+                    <div>
+                        <p class="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Ngày Bắt Đầu</p>
+                        <p class="text-sm font-medium text-slate-800 dark:text-slate-200">\${wo.start ? wo.start : "-"}</p>
+                    </div>
+                    <div>
+                        <p class="mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Hạn Chót</p>
+                        <p class="text-sm font-medium text-slate-800 dark:text-slate-200">\${wo.due ? wo.due : "-"}</p>
+                    </div>
+                </div>
+                <div class="mt-4 flex justify-end border-t border-slate-100 pt-4 dark:border-slate-700/60">
+                    <button type="button" onclick="closeDayDetail()"
+                       class="rounded-xl border border-slate-200 bg-slate-50 px-5 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+                        Đóng
+                    </button>
                 </div>
             </div>`;
         }).join('');

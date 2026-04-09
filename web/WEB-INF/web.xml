@@ -74,8 +74,8 @@
         <servlet-class>pms.controllers.WorkOrderController</servlet-class>
     </servlet>
     <servlet>
-        <servlet-name>ProductionLogController</servlet-name>
-        <servlet-class>pms.controllers.ProductionLogController</servlet-class>
+        <servlet-name>ProductionTrackingController</servlet-name>
+        <servlet-class>pms.controllers.ProductionTrackingController</servlet-class>
     </servlet>
     <servlet>
         <servlet-name>BOMController</servlet-name>
@@ -133,10 +133,7 @@
         <servlet-name>InventoryController</servlet-name>
         <servlet-class>pms.controllers.InventoryController</servlet-class>
     </servlet>
-    <servlet>
-        <servlet-name>QcController</servlet-name>
-        <servlet-class>pms.controllers.QcController</servlet-class>
-    </servlet>
+
     <servlet>
         <servlet-name>KanbanController</servlet-name>
         <servlet-class>pms.controllers.KanbanController</servlet-class>
@@ -172,7 +169,11 @@
         <url-pattern>/WorkOrderController</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
-        <servlet-name>ProductionLogController</servlet-name>
+        <servlet-name>ProductionTrackingController</servlet-name>
+        <url-pattern>/ProductionTrackingController</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>ProductionTrackingController</servlet-name>
         <url-pattern>/ProductionLogController</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
@@ -232,7 +233,7 @@
         <url-pattern>/InventoryController</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
-        <servlet-name>QcController</servlet-name>
+        <servlet-name>ProductionTrackingController</servlet-name>
         <url-pattern>/QcController</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
